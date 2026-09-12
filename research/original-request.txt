@@ -1,0 +1,1409 @@
+You are the planning and architecture model for a software project.
+
+Do NOT jump straight into coding.
+
+First investigate the current official documentation, resolve conflicting information, test the most important assumptions where possible, and then produce a detailed implementation plan that a coding agent can execute phase by phase.
+
+The product is an AI-enabled, cloud-hosted trading journal for a professional meme-coin trader using GMGN to trade Robinhood Chain.
+
+The application should automatically ingest objective trade data, while the trader manually records only the subjective decision-making that the API/blockchain cannot know.
+
+The core journal model is NOT a generic "notes" field.
+
+It is a chronological THESIS TIMELINE that changes over the life of a trade.
+
+The system should preserve exactly what the trader believed at each decision point and later use AI + quantitative analysis to determine which types of reasoning, catalysts, setups, behavioral patterns, and trade-management decisions actually produce good results.
+
+---
+
+# PRIMARY USER WORKFLOW
+
+The trader uses GMGN normally.
+
+Example journal entry:
+
+TGCOINS
+
+Buy Thesis (150k):
+Good technology by an account that makes memecoins, could send if a big KOL claims their tokens.
+Lets you launch a Telegram token for any Telegram user and airdrop them tokens.
+
+Actively monitoring the trade on FOMO to see if big KOLs are going to buy. I believe they would buy before claiming their fees on Telegram, which would create a pump.
+
+Sell Thesis (130k):
+There's no way to verify if a creator claimed their cryptobot fees, so the main catalyst on this trade is invisible unless a creator tweets about it or buys, which is a much bigger ask than simply claiming fees.
+
+General buy/sell thoughts:
+Made by a developer that pumps out a bunch of tokens, which usually die. Not sure that this project will get long-term support.
+
+Reference:
+https://x.com/buildersdao__
+
+There MAY also be one or more HOLD THESIS updates while the trade is open.
+
+For example:
+
+Hold Thesis (185k):
+Still holding because two larger accounts interacted with the product and volume remains strong. Original catalyst has not happened yet, but probability of KOL adoption appears higher than at entry.
+
+The trader may create multiple hold-thesis updates.
+
+The application must be designed around this real workflow.
+
+---
+
+# CORE PRODUCT PRINCIPLE
+
+Objective data should be automatic.
+
+Subjective reasoning should be manual.
+
+The trader should NOT have to manually enter:
+
+* token;
+* contract;
+* buy/sell;
+* trade size;
+* transaction hash;
+* timestamp;
+* price;
+* market cap where available;
+* position size;
+* realized P&L;
+* average entry;
+* average exit;
+* gas;
+* fill history.
+
+The trader should primarily enter:
+
+* Buy Thesis;
+* optional Hold Thesis updates;
+* Sell Thesis;
+* General Buy/Sell Thoughts;
+* optional confidence;
+* optional thesis-status update;
+* optional reference URLs;
+* optional note attached to a meaningful fill.
+
+The journal should require minimal friction because the trader may be actively trading for many hours.
+
+---
+
+# THESIS TIMELINE MODEL
+
+Do NOT create a single mutable `reasoning` or `thesis` field.
+
+A trade should contain immutable timestamped thesis events.
+
+Conceptually:
+
+trade_episode
+|
+|-- thesis_event: BUY
+|   - written_at
+|   - market context at writing time
+|   - original text
+|   - references
+|
+|-- fill
+|-- fill
+|
+|-- thesis_event: HOLD
+|   - written_at
+|   - original text
+|   - thesis status
+|
+|-- partial sell
+|
+|-- thesis_event: HOLD
+|
+|-- fill
+|
+|-- thesis_event: SELL
+|   - written_at
+|   - original text
+|   - thesis status
+|
+|-- general_thoughts
+
+Every thesis event must preserve the ORIGINAL trader-authored text or transcript.
+
+Never overwrite it with an AI-generated summary.
+
+AI may create structured features in separate records.
+
+This is essential so historical reasoning can be reprocessed later with better models.
+
+---
+
+# THESIS EVENT TYPES
+
+At minimum support:
+
+BUY
+
+HOLD
+
+SELL
+
+GENERAL_THOUGHT
+
+OPTIONAL_FILL_NOTE
+
+The difference matters.
+
+BUY THESIS:
+Why does the trader believe this asset is mispriced upward at entry?
+
+HOLD THESIS:
+Why is continuing to hold still attractive given new information and current price?
+
+SELL THESIS:
+Why is reducing or closing the position now better than continuing to hold?
+
+GENERAL THOUGHT:
+What did the trader learn about the token, developer, narrative, market structure, or setup that is useful beyond the immediate sell decision?
+
+OPTIONAL FILL NOTE:
+Why did the trader make a meaningful add/reduction at a particular moment?
+
+Do NOT force a thesis for every single fill.
+
+---
+
+# THESIS STATUS
+
+When writing HOLD or SELL reasoning, allow an optional extremely low-friction thesis status:
+
+* Stronger
+* Unchanged
+* Weaker
+* Invalidated
+
+The application should make this one-click.
+
+This is useful for evaluating process.
+
+Examples:
+
+good process / losing trade:
+thesis invalidated
+→ trader exits quickly
+
+bad process:
+thesis invalidated
+→ trader continues holding or adds
+
+good outcome / weak process:
+thesis already weakened
+→ price happens to rise anyway
+
+The analysis layer should explicitly distinguish outcome quality from decision quality.
+
+---
+
+# CRITICAL DATA ARCHITECTURE PRIORITY
+
+## ROUTE 1 — GMGN FIRST
+
+Before building custom Robinhood Chain indexing, test whether the current official GMGN API/CLI ecosystem provides the necessary Robinhood data.
+
+Research the newest official resources, especially:
+
+* official GMGNAI/gmgn-skills GitHub repository;
+* current gmgn-cli;
+* gmgn-portfolio;
+* gmgn-token;
+* gmgn-market;
+* current GMGN Agent/API documentation.
+
+There are inconsistencies between older GMGN documentation and newer repository documentation.
+
+Older docs may show narrower chain support.
+
+Newer official gmgn-skills documentation appears to include Robinhood support for portfolio/token/market functionality.
+
+Do NOT trust documentation blindly.
+
+Verify actual current behavior.
+
+---
+
+# GMGN PROOF OF CONCEPT
+
+First test equivalent functionality to:
+
+gmgn-cli portfolio activity 
+--chain robinhood 
+--wallet <TEST_WALLET> 
+--raw
+
+Test against a known Robinhood Chain wallet containing real meme-coin trades.
+
+Determine:
+
+1. Does Robinhood actually work?
+2. Does it return all wallet activity or only GMGN-executed activity?
+3. How far back can history be fetched?
+4. Is cursor pagination complete?
+5. What is the delay between execution and API visibility?
+6. Are partial buys/sells represented correctly?
+7. Are transfers represented separately?
+8. Can a single transaction produce multiple events?
+9. How are routed swaps represented?
+10. How are unusual quote assets represented?
+11. How are failed transactions handled?
+12. Are transaction USD values reliable?
+13. Are historical token prices included?
+14. Does every row include tx_hash?
+15. What is the real rate limit?
+
+Save representative RAW responses.
+
+Do not hard-code the documented schema until real data has been inspected.
+
+---
+
+# EXPECTED GMGN ACTIVITY DATA
+
+Current documentation appears to expose fields approximately like:
+
+* tx_hash
+* event_type / type
+* token.address
+* token.symbol
+* token_amount
+* cost_usd
+* buy_cost_usd
+* price
+* price_usd
+* timestamp
+* gas_usd
+* priority_fee
+* tip_fee
+* launchpad_platform
+* pagination cursor
+
+Verify actual fields and naming.
+
+Design normalization around empirical results, not assumptions.
+
+---
+
+# SECURITY
+
+The application must remain READ-ONLY.
+
+Never require:
+
+* wallet seed phrase;
+* trading private key;
+* GMGN trading permissions;
+* smart-contract approval;
+* transaction signing.
+
+Prefer API-key-only data access.
+
+If a GMGN endpoint requires a private key merely to fetch convenience data, find an alternative or omit that endpoint.
+
+A public wallet address should be enough to reconstruct core trading activity.
+
+---
+
+# DATA PROVIDER DESIGN
+
+Use a provider abstraction.
+
+Example:
+
+TradeDataProvider
+
+GMGNProvider
+AlchemyProvider
+RobinhoodRPCProvider
+
+The rest of the system should consume normalized internal data models.
+
+Do not couple the application directly to GMGN JSON response shapes.
+
+---
+
+# ROUTE 2 — ROBINHOOD CHAIN / ALCHEMY FALLBACK
+
+If GMGN is incomplete, delayed, unavailable, rate-limited, or misses relevant wallet activity, use Robinhood Chain directly.
+
+Robinhood Chain is EVM-compatible.
+
+Mainnet Chain ID:
+4663
+
+Prefer Alchemy or another production RPC provider.
+
+Evaluate indexed wallet/token transaction APIs before writing a raw block scanner.
+
+Fallback capabilities may include:
+
+* transaction receipts;
+* ERC-20 Transfer events;
+* eth_getLogs;
+* contract calls;
+* block data;
+* WebSocket subscriptions;
+* balance checks;
+* DEX pool data.
+
+Raw decoding should be the fallback, not the starting point.
+
+---
+
+# IDEAL HYBRID ARCHITECTURE
+
+If empirical testing supports it, prefer:
+
+GMGN:
+
+* wallet activity;
+* transaction USD value;
+* historical trade price;
+* token metadata;
+* market cap;
+* liquidity;
+* volume;
+* token age;
+* market analytics.
+
+Alchemy / Robinhood RPC:
+
+* transaction existence verification;
+* raw receipt verification;
+* missing event reconciliation;
+* fallback during GMGN outages;
+* source-of-truth transfer data.
+
+Do not rebuild what GMGN already provides reliably.
+
+---
+
+# RAW DATA PRINCIPLE
+
+Never discard source data.
+
+Store separately:
+
+raw_gmgn_events
+raw_chain_events
+raw_market_responses
+
+and normalized:
+
+fills
+positions
+trade_episodes
+thesis_events
+market_snapshots
+
+Raw records should include:
+
+* source/provider;
+* ingestion timestamp;
+* provider version/schema if known;
+* raw JSON;
+* original source identifier;
+* tx_hash;
+* chain.
+
+If parsers improve later, the journal must be rebuildable.
+
+---
+
+# TRANSACTIONS ARE NOT TRADES
+
+Do not equate one API transaction with one journal trade.
+
+A trade is a POSITION EPISODE.
+
+Example:
+
+BUY $500
+BUY $300
+BUY $700
+SELL $400
+SELL $600
+SELL remainder
+
+This should generally be one trade episode containing multiple fills.
+
+Initial deterministic model:
+
+position:
+0 → >dust threshold
+= OPEN EPISODE
+
+position remains >dust
+= SAME EPISODE
+
+position:
+
+> dust → <=dust
+> = CLOSE EPISODE
+
+later:
+0 → >dust
+= NEW EPISODE
+
+Support:
+
+* scaling in;
+* scaling out;
+* multiple buys;
+* partial exits;
+* full exits;
+* re-entry after closing;
+* repeated trading of same token;
+* transfers;
+* airdrops;
+* dust;
+* eventual multiple wallets.
+
+Create clear edge-case handling.
+
+---
+
+# THESIS EVENTS SHOULD NOT BE TIED 1:1 TO FILLS
+
+Example:
+
+BUY 150k market cap
+ADD 135k
+ADD 180k
+SELL 25% 220k
+SELL remainder 130k
+
+The trader should not have to journal five times.
+
+Instead:
+
+TRADE EPISODE
+|
+|-- Buy Thesis
+|-- Fill
+|-- Fill
+|-- Hold Thesis
+|-- Fill
+|-- Partial Sell
+|-- Hold Thesis
+|-- Final Sell
+|-- Sell Thesis
+|-- General Thoughts
+
+An OPTIONAL fill note may be attached to a meaningful sizing action, for example:
+
+"Added because Murad just followed."
+
+Do not require notes for routine fills.
+
+---
+
+# DATABASE MODEL
+
+Prefer managed Postgres, likely Supabase unless research finds a better fit.
+
+Suggested tables:
+
+users
+
+wallets
+
+tokens
+
+raw_provider_events
+
+fills
+
+positions
+
+trade_episodes
+
+thesis_events
+
+thesis_references
+
+fill_notes
+
+market_snapshots
+
+trading_sessions
+
+ai_thesis_extractions
+
+ai_trade_reviews
+
+ai_session_reviews
+
+analytics_features
+
+analytics_results
+
+sync_state
+
+provider_health
+
+Suggested `thesis_events` fields:
+
+id
+trade_episode_id
+event_type
+created_at
+effective_at
+original_text
+original_transcript
+thesis_status
+market_cap_at_event
+price_at_event
+position_size_at_event
+position_value_at_event
+is_ai_processed
+
+Do not mutate old thesis events.
+
+New thinking = new event.
+
+---
+
+# REFERENCES
+
+A thesis event may contain one or more URLs.
+
+Examples:
+
+X/Twitter account
+X/Twitter post
+Telegram
+website
+GitHub
+docs
+FOMO profile
+Block explorer
+other research source
+
+Store references structurally rather than only inside text.
+
+Possible fields:
+
+thesis_event_id
+url
+source_type
+title_if_known
+
+Do not require the system to fetch or summarize every URL in V1.
+
+Preserve them first.
+
+---
+
+# MARKET SNAPSHOTS
+
+Whenever a new trade opens, immediately capture an ENTRY SNAPSHOT.
+
+Whenever a thesis event is added, capture the market context at that exact time if feasible.
+
+Potential fields:
+
+* price;
+* market cap;
+* liquidity;
+* volume 1m;
+* volume 5m;
+* volume 15m;
+* volume 1h;
+* price change;
+* buy volume;
+* sell volume;
+* token age;
+* holder count;
+* top-holder concentration;
+* pool;
+* quote/base asset;
+* launchpad;
+* smart-money activity;
+* sniper data;
+* bundled-wallet metrics;
+* developer wallet metrics.
+
+Classify each field as:
+
+A. directly available from GMGN;
+B. derivable;
+C. requires another provider;
+D. unavailable.
+
+Do not delay V1 because one exotic metric is unavailable.
+
+---
+
+# PREVENT LOOK-AHEAD BIAS
+
+This is a high-priority requirement.
+
+Market state associated with a BUY or HOLD thesis must represent what was knowable AT THAT TIME.
+
+Do not later enrich historical thesis events with current/future data and treat it as entry information.
+
+Separate:
+
+decision-time information
+
+from
+
+post-trade outcome information.
+
+This distinction must exist at the schema level.
+
+---
+
+# JOURNAL USER EXPERIENCE
+
+Optimize for speed.
+
+Example new trade screen:
+
+TGCOINS
+$151k market cap
+Position: $700
+Opened 10:13 AM
+
+BUY THESIS
+
+[ large free-text field ]
+
+[ microphone ]
+
+Confidence:
+optional
+
+[ Save ]
+
+After saving, AI structuring happens asynchronously.
+
+Do not block the trader while AI runs.
+
+---
+
+# HOLD UX
+
+While position is open:
+
+TGCOINS
+Current MC: $184k
+Position: +22%
+
+[ Add Hold Thesis ]
+
+Thesis status:
+
+[ Stronger ]
+[ Same ]
+[ Weaker ]
+[ Invalidated ]
+
+Text:
+
+[ free text ]
+
+[ microphone ]
+
+[ Save ]
+
+There may be many hold updates.
+
+---
+
+# SELL UX
+
+When position is partially or fully sold:
+
+SELL THESIS
+
+[ free text ]
+
+Thesis status:
+[ Stronger ]
+[ Same ]
+[ Weaker ]
+[ Invalidated ]
+
+GENERAL BUY/SELL THOUGHTS
+
+[ free text ]
+
+References:
+[ add URL ]
+
+The Sell Thesis and General Thoughts are distinct objects/concepts.
+
+---
+
+# VOICE INPUT
+
+Voice input is important.
+
+Trader may be actively trading and not want to type long entries.
+
+Desired flow:
+
+record
+→ speech-to-text
+→ immediately preserve transcript
+→ save thesis event
+→ AI structure asynchronously
+
+Do not make speech-to-text or AI structuring block the journal unnecessarily.
+
+If transcription fails, preserve audio until recovery if privacy/cost architecture allows.
+
+---
+
+# AI THESIS EXTRACTION
+
+AI should extract structured features from natural language.
+
+Example:
+
+Original:
+
+"Good technology by an account that makes memecoins, could send if a big KOL claims their tokens. Actively monitoring FOMO to see if large KOLs buy before claiming fees."
+
+AI-derived fields may include:
+
+primary_thesis:
+technology + catalyst
+
+expected_catalyst:
+large KOL claims / buys
+
+expected_mechanism:
+KOL participation
+→ visible buying
+→ attention
+→ price increase
+
+developer_view:
+mixed
+
+developer_risk:
+serial token launcher
+
+external_dependency:
+yes
+
+dependency_actor:
+KOL
+
+monitoring_source:
+FOMO
+
+observability_assumption:
+creator action expected to be visible
+
+Do not require the trader to fill these fields manually.
+
+---
+
+# AI SHOULD MODEL THESIS CHANGES
+
+This is central.
+
+For a sequence:
+
+BUY:
+"I think creator claims will generate visible buying."
+
+SELL:
+"Claims are not observable, so the catalyst is invisible unless they tweet or buy."
+
+The AI should identify:
+
+what changed:
+observability assumption
+
+new information:
+creator claims cannot be independently verified
+
+impact:
+expected catalyst probability/value decreased
+
+decision:
+exit
+
+thesis_change_type:
+mechanism invalidation
+
+This gives much richer analytics than simple tags.
+
+---
+
+# EXAMPLES OF FUTURE QUESTIONS
+
+Design the data model so analysis can eventually answer:
+
+* How do I perform when my thesis depends on another person taking action?
+* Do I lose money when the primary catalyst is difficult to observe?
+* What is my expectancy when I like the technology but distrust the developer?
+* How often is my thesis invalidated after entry?
+* Do I exit quickly enough after invalidation?
+* Do my "Stronger" hold updates actually precede positive returns?
+* Do my "Weaker" thesis updates predict losses?
+* Am I better at catalyst trades or pure narrative trades?
+* How do trades where I actively monitor FOMO perform?
+* Do developer-quality concerns correctly predict poor long-term follow-through?
+* What types of thesis changes most often cause profitable exits?
+* How often do I correctly identify a bad trade but fail to sell?
+* What reasoning themes appear repeatedly in my largest losses?
+* What setups create my largest winners?
+
+---
+
+# OUTCOME VS PROCESS
+
+The system should explicitly avoid evaluating decisions solely by P&L.
+
+For each trade eventually analyze separately:
+
+THESIS QUALITY
+
+ENTRY QUALITY
+
+SIZING
+
+TRADE MANAGEMENT
+
+THESIS UPDATES
+
+EXIT QUALITY
+
+OUTCOME
+
+LUCK / UNRESOLVED VARIANCE
+
+Example:
+
+A losing trade may still receive:
+
+Thesis quality: good
+Entry process: good
+Risk management: good
+Exit process: good
+Outcome: negative
+
+Likewise a winning trade can still be poor process.
+
+---
+
+# COST BASIS / P&L
+
+Maintain our own journal calculations where possible.
+
+Store GMGN-reported data separately for comparison.
+
+Track:
+
+* buy cost;
+* sell proceeds;
+* realized P&L;
+* unrealized P&L;
+* gas;
+* fees;
+* net P&L;
+* ROI;
+* average entry;
+* average exit;
+* max capital deployed;
+* hold duration;
+* number of adds;
+* number of reductions;
+* maximum adverse excursion if historical pricing permits;
+* maximum favorable excursion if historical pricing permits.
+
+Evaluate weighted-average cost basis for journal analytics.
+
+Document chosen methodology.
+
+---
+
+# TRADING SESSION ANALYTICS
+
+A trade does not occur in isolation.
+
+Create a trading-session model.
+
+For every trade capture context such as:
+
+* hour of day;
+* time since session began;
+* trade number in session;
+* time since previous trade;
+* previous trade result;
+* rolling session P&L;
+* current drawdown;
+* win/loss streak;
+* current open exposure;
+* size relative to bankroll;
+* size relative to typical trade;
+* frequency of trades.
+
+Eventually answer:
+
+* Does performance deteriorate late in long sessions?
+* Do I increase risk after losses?
+* Do I overtrade after large wins?
+* Does my selectivity decline after many trades?
+* Is my confidence calibrated?
+* Do I average down differently after losses?
+* Does trade frequency predict lower expectancy?
+
+---
+
+# AI ANALYTICS ARCHITECTURE
+
+Do NOT dump hundreds of trades into an LLM and ask it to find patterns.
+
+Use multiple layers.
+
+## Layer 1 — Extraction
+
+Natural-language theses
+→ structured features
+
+## Layer 2 — Trade interpretation
+
+Compare:
+
+* buy thesis;
+* hold thesis timeline;
+* sell thesis;
+* fills;
+* market snapshots;
+* outcome.
+
+## Layer 3 — Quant engine
+
+Use SQL/Python/statistics to compute actual relationships first.
+
+Potential features:
+
+* thesis type;
+* catalyst type;
+* observable vs non-observable catalyst;
+* external dependency;
+* developer sentiment;
+* narrative type;
+* monitoring source;
+* confidence;
+* thesis-status changes;
+* market cap;
+* liquidity;
+* token age;
+* volume acceleration;
+* entry momentum;
+* position size;
+* time of day;
+* session duration;
+* previous-trade result;
+* averaging behavior;
+* number of adds;
+* hold duration.
+
+Compute:
+
+* N;
+* win rate;
+* mean return;
+* median return;
+* total P&L;
+* profit factor;
+* expectancy;
+* standard deviation;
+* confidence intervals;
+* statistical significance where appropriate.
+
+Do not elevate tiny samples into strong conclusions.
+
+## Layer 4 — AI explanation
+
+AI interprets statistically supported patterns.
+
+Architecture:
+
+trade data
+→ structured features
+→ quantitative analysis
+→ candidate findings
+→ AI explanation
+
+NOT:
+
+trade data
+→ LLM vibes
+
+---
+
+# CLOUD REQUIREMENT
+
+The journal should have essentially no impact on the trader's local machine.
+
+Local computer:
+
+browser only
+
+Cloud:
+
+API polling
+database
+transaction processing
+market snapshots
+speech-to-text
+AI extraction
+AI reviews
+statistics
+monitoring
+
+Potential stack:
+
+Frontend:
+Next.js + TypeScript
+Vercel
+
+Database/Auth/Realtime:
+Supabase/Postgres
+
+Persistent worker:
+Node.js/TypeScript
+Railway / Render / Fly.io / AWS ECS/Fargate or equivalent
+
+AI:
+OpenAI API behind a provider interface
+
+Statistics:
+SQL initially
+Python service later if needed
+
+Avoid a persistent WebSocket/polling process on the user's machine.
+
+---
+
+# GMGN IPv4 / NETWORKING
+
+Current GMGN documentation may require IPv4 requests.
+
+Verify this.
+
+If true, choose a worker host with reliable outbound IPv4.
+
+Test networking before committing deployment architecture.
+
+---
+
+# POLLING
+
+If GMGN is used for trade ingestion, determine correct polling based on current rate limits.
+
+The journal does not need millisecond latency.
+
+Target approximately:
+
+5–20 seconds after execution
+
+if API limits allow.
+
+Use:
+
+* cursor/checkpointing;
+* deduplication;
+* retries;
+* exponential backoff;
+* proper 429 handling;
+* periodic reconciliation.
+
+Do not permanently miss late-indexed events.
+
+---
+
+# RELIABILITY
+
+Design for:
+
+* cloud worker restart;
+* GMGN outage;
+* API latency;
+* rate limiting;
+* duplicate activity;
+* missing rows;
+* malformed metadata;
+* out-of-order arrival;
+* RPC failure;
+* late-indexed trades;
+* cloud deployment restart.
+
+Maintain:
+
+sync_state
+provider_health
+
+Potential reconciliation strategy:
+
+frequent:
+new activity polling
+
+periodic:
+re-fetch recent 30–60 minutes
+
+daily:
+larger historical reconciliation window
+
+Fallback:
+verify/recover through Alchemy/Robinhood RPC
+
+---
+
+# PROVIDER HEALTH
+
+Track:
+
+GMGN:
+
+* last successful call;
+* response latency;
+* rate limits;
+* latest event time;
+* API errors.
+
+Alchemy/RPC:
+
+* latest block;
+* RPC response time;
+* errors.
+
+Journal:
+
+* most recent ingested fill;
+* most recent trade episode update;
+* parser errors;
+* unresolved events.
+
+Eventually show:
+
+Journal Sync: Healthy
+
+rather than silently failing.
+
+---
+
+# INITIAL VALIDATION DATASET
+
+Before building AI analytics, validate ingestion against approximately 10–30 real Robinhood Chain transactions.
+
+Include:
+
+* normal buy;
+* normal sell;
+* partial sell;
+* multiple buys;
+* complete exit;
+* re-entry;
+* token transfer;
+* unusual quote asset;
+* routed GMGN trade;
+* externally executed trade if possible.
+
+Compare:
+
+transaction hash
+expected side
+GMGN side
+token
+amount
+USD value
+price
+timestamp
+chain/explorer data
+result
+notes
+
+Do not build analytics on unvalidated trade data.
+
+---
+
+# BUILD PHASES
+
+Produce an implementation plan approximately like this.
+
+PHASE 0
+Documentation research and capability verification.
+
+PHASE 1
+GMGN Robinhood ingestion proof of concept.
+
+Success:
+Given public wallet address, import accurate historical activity.
+
+PHASE 2
+Cloud ingestion worker + persistent raw database.
+
+Success:
+New trades appear automatically with no local software running.
+
+PHASE 3
+Fill normalization + position state machine + trade episodes.
+
+Success:
+Multiple fills reconstruct actual positions correctly.
+
+PHASE 4
+Journal UX.
+
+Success:
+Trader can quickly add Buy Thesis, Hold Thesis, Sell Thesis, General Thoughts, references, and voice notes.
+
+PHASE 5
+Market snapshots.
+
+Success:
+Every new trade and thesis event can be associated with contemporaneous market context.
+
+PHASE 6
+AI extraction.
+
+Success:
+Natural-language reasoning becomes structured features without altering original text.
+
+PHASE 7
+Trade review.
+
+Success:
+AI analyzes thesis evolution and process separately from outcome.
+
+PHASE 8
+Session analytics.
+
+PHASE 9
+Quantitative pattern engine.
+
+PHASE 10
+Reliability, reconciliation, provider fallback, monitoring, and backup.
+
+For EVERY phase include:
+
+* objective;
+* exact components;
+* APIs;
+* schema changes;
+* likely files/modules;
+* tests;
+* acceptance criteria;
+* dependencies;
+* risks;
+* what NOT to build yet.
+
+---
+
+# DO NOT OVERENGINEER
+
+This application is initially for ONE professional trader and one or a few wallets.
+
+Expected workload:
+
+hundreds of trades per day
+
+not millions per second.
+
+Avoid Kafka, microservice sprawl, distributed-event infrastructure, or unnecessary DevOps complexity.
+
+A small persistent worker + Postgres + web app should be sufficient.
+
+Design clean interfaces so pieces can later be replaced.
+
+---
+
+# QUESTIONS THE RESEARCH PHASE MUST ANSWER
+
+Explicitly answer all of these:
+
+1. Does current `gmgn-cli portfolio activity --chain robinhood` work?
+2. Does GMGN capture all wallet activity or only GMGN-executed trades?
+3. How far back can activity history go?
+4. Is cursor pagination complete?
+5. What is real ingestion latency?
+6. What is the exact current schema?
+7. Can one transaction generate multiple activity events?
+8. Are partial buys/sells represented correctly?
+9. Does GMGN accurately provide historical USD trade values?
+10. What GMGN endpoints require only API key authentication?
+11. Can the entire journal remain read-only without a wallet private key?
+12. What are current rate limits?
+13. Is IPv4 still mandatory?
+14. What market metrics are available for Robinhood?
+15. Can historical K-lines be retrieved?
+16. Can holder/top-holder metrics be retrieved?
+17. Can smart-money/sniper/bundle data be retrieved?
+18. Can token creation time be retrieved?
+19. Can market cap/liquidity be captured at entry?
+20. What information requires Robinhood RPC/Alchemy?
+21. Can Alchemy cheaply fill missing GMGN events?
+22. What should be the canonical source for P&L?
+23. What infrastructure can remain free?
+24. What unavoidable monthly costs exist?
+25. What should V1 explicitly defer?
+
+---
+
+# FINAL OUTPUT REQUIRED
+
+Produce a concrete architecture/design document containing:
+
+1. Documentation research findings
+2. Conflicting or stale documentation discovered
+3. GMGN capability matrix for Robinhood
+4. Results of live tests where possible
+5. Final recommended provider architecture
+6. Cloud-hosting architecture
+7. Data-flow diagram
+8. Database schema
+9. Trade-position state machine
+10. Thesis-event state model
+11. P&L methodology
+12. Market-snapshot strategy
+13. AI thesis-extraction strategy
+14. Trade-review architecture
+15. Quantitative-analysis architecture
+16. Session-analysis model
+17. Reliability/reconciliation strategy
+18. Security model
+19. Estimated monthly infrastructure cost
+20. Phase-by-phase implementation plan
+21. Acceptance criteria for every phase
+22. Fallback/failure strategy
+23. Explicit assumptions and unresolved questions
+24. Recommended V1 scope
+25. A SECOND implementation-ready prompt for the coding model that builds PHASE 1 only.
+
+Most important priorities, in order:
+
+1. Accurate trade records
+2. Preserve exactly what the trader believed at each decision point
+3. Extremely low-friction journaling
+4. No meaningful compute burden on the trading computer
+5. Read-only wallet security
+6. GMGN-first ingestion if empirically reliable
+7. No look-ahead bias
+8. Strong long-term statistical analysis
+9. Separate process quality from trade outcome
+10. Low cloud cost
+11. Simple, auditable architecture
+12. Replaceable data providers
+
+Do not give generic startup or software advice.
+
+Use evidence.
+
+Do not begin writing the full application until the Phase 1 ingestion path has been empirically validated.

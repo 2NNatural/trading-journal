@@ -1,0 +1,8 @@
+{
+  "type": "LOCAL_SYNTHETIC_MOCKED_TRANSPORT",
+  "cli_version": "1.6.1",
+  "test": "read request receives 429 with short cooldown",
+  "fetch_calls": 1,
+  "result": "GET /v1/user/wallet_activity failed: HTTP 429 code=429 error=RATE_LIMIT_EXCEEDED message=synthetic offline test. Rate limit resets at 2026-09-10 12:37:23 GMT-07:00 (~1s remaining). Stop sending requests before then; repeated requests can extend the ban by 5s up to 5 minutes.",
+  "conclusion": "Observed one request and immediate rejection; no automatic retry in this test. Source returns async parseResponse without await inside try/catch."
+}

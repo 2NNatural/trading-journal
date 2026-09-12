@@ -1,0 +1,7 @@
+HTTP/2 403 
+content-type: application/json
+content-length: 97
+x-alchemy-trace-id: ab2d5487-b854-434d-9b1f-0e60e74182c3
+date: Thu, 10 Sep 2026 19:19:59 GMT
+server: istio-envoy
+

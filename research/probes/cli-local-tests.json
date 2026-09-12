@@ -1,0 +1,26 @@
+{
+  "test_type": "local source behavior; mocked transport, not a live API success",
+  "cli_version": "1.6.1",
+  "chain_validation": "PASS",
+  "no_private_key_request": {
+    "url": "https://openapi.gmgn.ai/v1/user/wallet_activity?chain=robinhood&wallet_address=0x0000000000000000000000000000000000000000&limit=1&timestamp=1789068000&client_id=8608256c-36d0-4eac-92a8-a6469740411a",
+    "method": "GET",
+    "headerNames": [
+      "X-APIKEY",
+      "Content-Type",
+      "User-Agent"
+    ]
+  },
+  "mocked_response": {
+    "activities": [],
+    "next": null
+  },
+  "synthetic_sanitization": {
+    "data": {
+      "token": {
+        "symbol": "TEST"
+      }
+    },
+    "changed": 1
+  }
+}

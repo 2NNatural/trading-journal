@@ -1,0 +1,299 @@
+{
+  "research_date": "2026-09-10",
+  "created_at": "2026-09-10T20:01:51.081146+00:00",
+  "repository_commit": "ec95135ecabfdf617c0690a28af64e84d22d5210",
+  "cli_version": "1.6.1",
+  "authenticated_gmgn_data_obtained": false,
+  "wallet_validation_dataset_complete": false,
+  "note": "File mtime is a saved-artifact time, not necessarily request initiation or source publication time. Web-only sources are cited in the architecture document.",
+  "files": [
+    {
+      "path": "README.md",
+      "kind": "authored_research",
+      "source_url": null,
+      "saved_file_mtime_utc": "2026-09-10T19:38:17.785921+00:00",
+      "bytes": 5619,
+      "sha256": "45e1140f52a8a43f74b76b21403b43283e27113877815da406801355d6628a8b"
+    },
+    {
+      "path": "local-cli-tests.mjs",
+      "kind": "authored_research",
+      "source_url": null,
+      "saved_file_mtime_utc": "2026-09-10T19:38:17.790160+00:00",
+      "bytes": 2251,
+      "sha256": "0da3cebe49ad378c28e1d11212843384b3840eb6928aad3a00daeacd937910a0"
+    },
+    {
+      "path": "original-request.txt",
+      "kind": "user_supplied_specification",
+      "source_url": null,
+      "saved_file_mtime_utc": "2026-09-10T19:35:45.289114+00:00",
+      "bytes": 27192,
+      "sha256": "eaaf5deb86fcc82caf579448faffc5f6ee44a993f375654e6ebc8df90ec60a6b"
+    },
+    {
+      "path": "probes/alchemy-demo.headers",
+      "kind": "live_response",
+      "source_url": "https://robinhood-mainnet.g.alchemy.com/v2/docs-demo",
+      "saved_file_mtime_utc": "2026-09-10T19:19:59.702826+00:00",
+      "bytes": 183,
+      "sha256": "33eb1db87f4ff7fcab17606962c2a58917b2abe5e1a0247190be9cd8ca3b310b"
+    },
+    {
+      "path": "probes/alchemy-demo.json",
+      "kind": "live_response",
+      "source_url": "https://robinhood-mainnet.g.alchemy.com/v2/docs-demo",
+      "saved_file_mtime_utc": "2026-09-10T19:19:59.702952+00:00",
+      "bytes": 97,
+      "sha256": "95fe2e5cc82667675a311825efefbd7d2846cf4478265a7b4d63cc095920c720"
+    },
+    {
+      "path": "probes/blockscout-transactions.headers",
+      "kind": "live_response",
+      "source_url": "https://robinhoodchain.blockscout.com/api/v2/transactions",
+      "saved_file_mtime_utc": "2026-09-10T19:18:10.347089+00:00",
+      "bytes": 2162,
+      "sha256": "8e8476bd3b5977d909e7a1f85aa5571eff029b9f1ce783016ce394846ab1404a"
+    },
+    {
+      "path": "probes/blockscout-transactions.json",
+      "kind": "live_response",
+      "source_url": "https://robinhoodchain.blockscout.com/api/v2/transactions",
+      "saved_file_mtime_utc": "2026-09-10T19:18:10.347639+00:00",
+      "bytes": 5477,
+      "sha256": "d70908393c4348035a189d51e5810b01affdc143c6beb6701de8e25767ddf5f7"
+    },
+    {
+      "path": "probes/cli-local-tests.json",
+      "kind": "local_synthetic_mocked_transport",
+      "source_url": null,
+      "saved_file_mtime_utc": "2026-09-10T19:20:00.243582+00:00",
+      "bytes": 685,
+      "sha256": "6d4942499c50b4c1ec2d18fbf5f47b6d57db004eedee2aefe85dd9882d8e2bd8"
+    },
+    {
+      "path": "probes/cli-rate-limit-local-test.json",
+      "kind": "local_synthetic_mocked_transport",
+      "source_url": null,
+      "saved_file_mtime_utc": "2026-09-10T19:37:22.029829+00:00",
+      "bytes": 610,
+      "sha256": "e742add7b201345dfd63a78b8f633835df823c430cdf9610be40ead39e4ce843"
+    },
+    {
+      "path": "probes/gmgn-unauthenticated.headers",
+      "kind": "live_response",
+      "source_url": "https://openapi.gmgn.ai/v1/user/wallet_activity",
+      "saved_file_mtime_utc": "2026-09-10T19:19:59.857157+00:00",
+      "bytes": 5632,
+      "sha256": "3d37f11324a42818c123466ae0eb7368dfe5fd632fb0d059e0fdf18aefe578e0"
+    },
+    {
+      "path": "probes/gmgn-unauthenticated.json",
+      "kind": "live_response",
+      "source_url": "https://openapi.gmgn.ai/v1/user/wallet_activity",
+      "saved_file_mtime_utc": "2026-09-10T19:19:59.857316+00:00",
+      "bytes": 77,
+      "sha256": "3ffd319545f2d10d3d8708ff87fb3096470cb69deb9eaf1fd754c3a44c742703"
+    },
+    {
+      "path": "probes/receipt-sample-request.json",
+      "kind": "read_only_probe_request",
+      "source_url": null,
+      "saved_file_mtime_utc": "2026-09-10T19:21:00.317681+00:00",
+      "bytes": 1510,
+      "sha256": "7761f27b79afa088fd6cb4aa543f3847d9a7bb089940ab234a407308038d4af1"
+    },
+    {
+      "path": "probes/receipt-sample.headers",
+      "kind": "live_response",
+      "source_url": "https://rpc.mainnet.chain.robinhood.com",
+      "saved_file_mtime_utc": "2026-09-10T19:21:03.038727+00:00",
+      "bytes": 257,
+      "sha256": "58b46e778ee3ed6b0ac1a5cd77944d4a61daa1f2b96ab7ea2d83224df7906848"
+    },
+    {
+      "path": "probes/receipt-sample.json",
+      "kind": "live_response",
+      "source_url": "https://rpc.mainnet.chain.robinhood.com",
+      "saved_file_mtime_utc": "2026-09-10T19:21:03.039059+00:00",
+      "bytes": 11444,
+      "sha256": "2b526d4a733d52006bfbb038b2d422c0642339e1f76f9281b2a1dfdd071b1d03"
+    },
+    {
+      "path": "probes/robinhood-block.headers",
+      "kind": "live_response",
+      "source_url": "https://rpc.mainnet.chain.robinhood.com",
+      "saved_file_mtime_utc": "2026-09-10T19:20:00.126730+00:00",
+      "bytes": 257,
+      "sha256": "2511a36e66ed8d90ad1d28ff1fea19a8f5d9393cb79e60f397c0640661061a33"
+    },
+    {
+      "path": "probes/robinhood-block.json",
+      "kind": "live_response",
+      "source_url": "https://rpc.mainnet.chain.robinhood.com",
+      "saved_file_mtime_utc": "2026-09-10T19:20:00.137715+00:00",
+      "bytes": 133968,
+      "sha256": "3325562fc9d21916d268b01b97a48b4fe4355671069a7677ab517b44ceefcc6e"
+    },
+    {
+      "path": "probes/robinhood-receipts-finality.headers",
+      "kind": "live_response",
+      "source_url": "https://rpc.mainnet.chain.robinhood.com",
+      "saved_file_mtime_utc": "2026-09-10T19:20:38.183133+00:00",
+      "bytes": 256,
+      "sha256": "6c858d44cc8cd180165f934f43ffb4d7919780702c6ae0d1d37f627ac0682744"
+    },
+    {
+      "path": "probes/robinhood-receipts-finality.json",
+      "kind": "live_response",
+      "source_url": "https://rpc.mainnet.chain.robinhood.com",
+      "saved_file_mtime_utc": "2026-09-10T19:20:38.206773+00:00",
+      "bytes": 19921,
+      "sha256": "511275b4b8781ae5a3ca2acfb0aa20f00705fd034b37e077a3770d2251d5bce6"
+    },
+    {
+      "path": "probes/robinhood-rpc.headers",
+      "kind": "live_response",
+      "source_url": "https://rpc.mainnet.chain.robinhood.com",
+      "saved_file_mtime_utc": "2026-09-10T19:18:10.547570+00:00",
+      "bytes": 256,
+      "sha256": "6475553a6a26b7a684916baf6bb035a73fbffd23611e6aae40301fa26d24649d"
+    },
+    {
+      "path": "probes/robinhood-rpc.json",
+      "kind": "live_response",
+      "source_url": "https://rpc.mainnet.chain.robinhood.com",
+      "saved_file_mtime_utc": "2026-09-10T19:18:10.547891+00:00",
+      "bytes": 91,
+      "sha256": "ab64f0e3112a274f009605d75ed87561911402f1a1d00bb396f2c38871617aa3"
+    },
+    {
+      "path": "sources/cli-1.6.1/dist/client/OpenApiClient.js",
+      "kind": "official_public_source",
+      "source_url": "https://registry.npmjs.org/gmgn-cli/-/gmgn-cli-1.6.1.tgz",
+      "saved_file_mtime_utc": "2026-09-10T19:21:00.314250+00:00",
+      "bytes": 19241,
+      "sha256": "ded4a59dfe6c9a1355a0f8df05bafae21ce68b85ed4ab95e5fcb1aab8c059537"
+    },
+    {
+      "path": "sources/cli-1.6.1/dist/client/signer.js",
+      "kind": "official_public_source",
+      "source_url": "https://registry.npmjs.org/gmgn-cli/-/gmgn-cli-1.6.1.tgz",
+      "saved_file_mtime_utc": "2026-09-10T19:21:00.314492+00:00",
+      "bytes": 2598,
+      "sha256": "35610b90063e4bb5b31dbac274197b246c8a712b1d3a08355dd42a37c321dc4d"
+    },
+    {
+      "path": "sources/cli-1.6.1/dist/commands/market.js",
+      "kind": "official_public_source",
+      "source_url": "https://registry.npmjs.org/gmgn-cli/-/gmgn-cli-1.6.1.tgz",
+      "saved_file_mtime_utc": "2026-09-10T19:21:00.313933+00:00",
+      "bytes": 30748,
+      "sha256": "7a08c2056abeedbad386dad5c599a3e701c13b9727dad29dbd65b0bf0ac11faf"
+    },
+    {
+      "path": "sources/cli-1.6.1/dist/commands/portfolio.js",
+      "kind": "official_public_source",
+      "source_url": "https://registry.npmjs.org/gmgn-cli/-/gmgn-cli-1.6.1.tgz",
+      "saved_file_mtime_utc": "2026-09-10T19:21:00.313420+00:00",
+      "bytes": 8181,
+      "sha256": "c2e7fedd80571af86e9780a3fbecb9920ad3385f2b80e8fa269305524e272232"
+    },
+    {
+      "path": "sources/cli-1.6.1/dist/output.js",
+      "kind": "official_public_source",
+      "source_url": "https://registry.npmjs.org/gmgn-cli/-/gmgn-cli-1.6.1.tgz",
+      "saved_file_mtime_utc": "2026-09-10T19:21:00.314898+00:00",
+      "bytes": 1493,
+      "sha256": "b4aa197ce3a429aaa7bde705d9c074d2e7f414191b523c1129408692f2412092"
+    },
+    {
+      "path": "sources/cli-1.6.1/dist/sanitize.js",
+      "kind": "official_public_source",
+      "source_url": "https://registry.npmjs.org/gmgn-cli/-/gmgn-cli-1.6.1.tgz",
+      "saved_file_mtime_utc": "2026-09-10T19:21:00.315239+00:00",
+      "bytes": 6201,
+      "sha256": "85c813461100dd8aabfbcbb0da2ceeccb5807b8023c4c0e1268e7af68248379b"
+    },
+    {
+      "path": "sources/cli-1.6.1/dist/validate.js",
+      "kind": "official_public_source",
+      "source_url": "https://registry.npmjs.org/gmgn-cli/-/gmgn-cli-1.6.1.tgz",
+      "saved_file_mtime_utc": "2026-09-10T19:21:00.315649+00:00",
+      "bytes": 3452,
+      "sha256": "0c2b2f6915b0bf15564f3279b54e16c37525c929c512877c6824a3fe53ae0751"
+    },
+    {
+      "path": "sources/cli-1.6.1/package.json",
+      "kind": "official_public_source",
+      "source_url": "https://registry.npmjs.org/gmgn-cli/-/gmgn-cli-1.6.1.tgz",
+      "saved_file_mtime_utc": "2026-09-10T19:21:00.316053+00:00",
+      "bytes": 1060,
+      "sha256": "a7eacbe63530da5effb77d60758c121f0bf1fde92862b6d6fa379902df226539"
+    },
+    {
+      "path": "sources/gmgn-aitrader.md",
+      "kind": "official_public_source",
+      "source_url": "https://raw.githubusercontent.com/GMGNAI/skillmarket-demos/main/aitrader/README.en.md",
+      "saved_file_mtime_utc": "2026-09-10T19:17:32.277769+00:00",
+      "bytes": 13770,
+      "sha256": "f1c11213cceae22a088cb5da37f507ef1729c1066f88a9df82475ff4e994b931"
+    },
+    {
+      "path": "sources/gmgn-cli-npm-latest.json",
+      "kind": "official_public_source",
+      "source_url": "https://registry.npmjs.org/gmgn-cli/latest",
+      "saved_file_mtime_utc": "2026-09-10T19:17:32.472549+00:00",
+      "bytes": 2067,
+      "sha256": "1f7c6f3c10a29cfb2ea2f60462900ac8aa03352799e56502937112607100428a"
+    },
+    {
+      "path": "sources/gmgn-cli-usage.md",
+      "kind": "official_public_source",
+      "source_url": "https://raw.githubusercontent.com/GMGNAI/gmgn-skills/main/docs/cli-usage.md",
+      "saved_file_mtime_utc": "2026-09-10T19:17:30.976902+00:00",
+      "bytes": 44495,
+      "sha256": "5919a186492471f373569e26409c5bd474b963a88a554678b9627ddfe86c5d67"
+    },
+    {
+      "path": "sources/gmgn-commit.json",
+      "kind": "official_public_source",
+      "source_url": "https://api.github.com/repos/GMGNAI/gmgn-skills/commits/main",
+      "saved_file_mtime_utc": "2026-09-10T19:17:32.818358+00:00",
+      "bytes": 9152,
+      "sha256": "9a89870952d0afd52b88bb5221b987f6b69563c1533a286b45a94a0a51bfd256"
+    },
+    {
+      "path": "sources/gmgn-market.md",
+      "kind": "official_public_source",
+      "source_url": "https://raw.githubusercontent.com/GMGNAI/gmgn-skills/main/skills/gmgn-market/SKILL.md",
+      "saved_file_mtime_utc": "2026-09-10T19:17:32.160717+00:00",
+      "bytes": 76668,
+      "sha256": "4dcdca7151b06b36a0d13fa666c5b89f0d1ecad698e12973d06d2a5044b40dbb"
+    },
+    {
+      "path": "sources/gmgn-portfolio.md",
+      "kind": "official_public_source",
+      "source_url": "https://raw.githubusercontent.com/GMGNAI/gmgn-skills/main/skills/gmgn-portfolio/SKILL.md",
+      "saved_file_mtime_utc": "2026-09-10T19:17:33.851471+00:00",
+      "bytes": 23426,
+      "sha256": "acf0739e1c9d651df74d146e396e395eeb47ade9ab50f7d69e8e832882d6941c"
+    },
+    {
+      "path": "sources/gmgn-readme.md",
+      "kind": "official_public_source",
+      "source_url": "https://raw.githubusercontent.com/GMGNAI/gmgn-skills/ec95135ecabfdf617c0690a28af64e84d22d5210/Readme.md",
+      "saved_file_mtime_utc": "2026-09-10T19:19:58.460895+00:00",
+      "bytes": 32267,
+      "sha256": "a2e07a3c9f4c8c19e544b2bec0c197cb413c4160ff215672fb35214733d619b5"
+    },
+    {
+      "path": "sources/gmgn-token.md",
+      "kind": "official_public_source",
+      "source_url": "https://raw.githubusercontent.com/GMGNAI/gmgn-skills/main/skills/gmgn-token/SKILL.md",
+      "saved_file_mtime_utc": "2026-09-10T19:17:32.649965+00:00",
+      "bytes": 41189,
+      "sha256": "f990130565bfe76c437b21a6f46baf8634f029817d7ea9b57d03642bf4ad0dcb"
+    }
+  ]
+}

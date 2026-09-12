@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101114" />
+    <meta name="description" content="A private trading journal built around objective fills and an immutable thesis timeline." />
+    <title>Robinhood Journal</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Journal navigation">
+        <div class="brand-lockup">
+          <div class="brand-mark" aria-hidden="true">R</div>
+          <div>
+            <div class="brand-name">Robinhood</div>
+            <div class="brand-subtitle">Trading journal</div>
+          </div>
+        </div>
+
+        <nav class="primary-nav" aria-label="Primary">
+          <button class="nav-item is-active" data-filter="all" type="button"><span class="nav-icon">◈</span>Overview</button>
+          <button class="nav-item" data-filter="open" type="button"><span class="nav-icon">↗</span>Open positions</button>
+          <button class="nav-item" data-filter="closed" type="button"><span class="nav-icon">✓</span>Closed trades</button>
+          <button class="nav-item" data-filter="gaps" type="button"><span class="nav-icon">○</span>Thesis gaps <span class="nav-count" id="gapCount">0</span></button>
+        </nav>
+
+        <div class="sidebar-spacer"></div>
+        <div class="sync-card">
+          <div class="sync-card-heading"><span class="status-dot"></span> Personal journal</div>
+          <p>Your imported notes are local until Supabase is connected.</p>
+          <span class="sync-card-link">Read-only wallet plan</span>
+        </div>
+        <div class="sidebar-footer">
+          <span>Robinhood Chain</span>
+          <span class="chain-pill">4663</span>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div class="breadcrumb"><span>Journal</span><span class="breadcrumb-separator">/</span><span class="breadcrumb-current">Overview</span></div>
+          <div class="topbar-actions">
+            <div class="freshness" id="freshnessLabel"><span class="freshness-dot"></span> Imported notes</div>
+            <button class="icon-button" id="refreshButton" type="button" title="Refresh imported notes" aria-label="Refresh imported notes">↻</button>
+            <div class="avatar" aria-label="Personal workspace">N</div>
+          </div>
+        </header>
+
+        <div class="page-content">
+          <section class="hero-row">
+            <div>
+              <p class="eyebrow">Thursday, September 11, 2026</p>
+              <h1>Good trading starts with a clear thesis.</h1>
+              <p class="hero-copy">Keep the decisions you made in the moment next to what the market did afterward.</p>
+            </div>
+            <button class="primary-button" id="newThesisButton" type="button"><span>＋</span> Add thesis update</button>
+          </section>
+
+          <section class="metric-grid" aria-label="Journal summary">
+            <article class="metric-card metric-card-accent">
+              <div class="metric-label">Open positions</div>
+              <div class="metric-value" id="openPositionsMetric">0</div>
+              <div class="metric-note"><span class="metric-arrow">↗</span> Currently tracked</div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-label">Realized P&amp;L</div>
+              <div class="metric-value positive" id="realizedPnlMetric">$0.00</div>
+              <div class="metric-note">From verified fills</div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-label">Thesis coverage</div>
+              <div class="metric-value" id="coverageMetric">0%</div>
+              <div class="metric-progress"><span id="coverageProgress"></span></div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-label">Last sync</div>
+              <div class="metric-value metric-value-small" id="lastSyncMetric">Demo</div>
+              <div class="metric-note" id="lastSyncNote">Connect Supabase to sync</div>
+            </article>
+          </section>
+
+          <div class="workspace-grid">
+            <section class="panel positions-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Objective record</p>
+                  <h2>Position episodes</h2>
+                </div>
+                <button class="text-button" id="viewAllButton" type="button">View all <span>→</span></button>
+              </div>
+              <div class="position-list" id="positionList" aria-live="polite"></div>
+            </section>
+
+            <section class="panel timeline-panel">
+              <div class="panel-heading timeline-heading">
+                <div>
+                  <p class="eyebrow">Subjective record</p>
+                  <h2 id="timelineTitle">Thesis timeline</h2>
+                </div>
+                <button class="small-action" id="timelineAddButton" type="button">＋ Update</button>
+              </div>
+              <div class="selected-position-summary" id="selectedPositionSummary"></div>
+              <div class="timeline" id="timeline" aria-live="polite"></div>
+              <div class="timeline-empty" id="timelineEmpty" hidden>
+                <div class="empty-icon">✦</div>
+                <h3>Start the thesis timeline</h3>
+                <p>Write down what you believe before the next decision changes the trade.</p>
+                <button class="secondary-button" id="emptyAddButton" type="button">Add first thesis</button>
+              </div>
+            </section>
+          </div>
+
+          <section class="composer-panel panel" id="composerPanel">
+            <div class="composer-heading">
+              <div>
+                <p class="eyebrow">Write it as you see it now</p>
+                <h2>Add a thesis update</h2>
+              </div>
+              <button class="close-button" id="closeComposerButton" type="button" aria-label="Close thesis editor">×</button>
+            </div>
+            <form id="thesisForm">
+              <div class="composer-toolbar">
+                <div class="event-type-group" role="group" aria-label="Thesis type">
+                  <button class="event-type is-selected" data-event-type="HOLD" type="button">Hold thesis</button>
+                  <button class="event-type" data-event-type="BUY" type="button">Buy thesis</button>
+                  <button class="event-type" data-event-type="SELL" type="button">Sell thesis</button>
+                  <button class="event-type" data-event-type="GENERAL_THOUGHT" type="button">General thought</button>
+                </div>
+                <label class="confidence-field">Confidence
+                  <select id="confidenceField">
+                    <option value="">Optional</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </label>
+              </div>
+              <input type="hidden" id="eventTypeField" value="HOLD" />
+              <label class="sr-only" for="thesisText">Thesis update</label>
+              <textarea id="thesisText" rows="4" placeholder="What are you seeing, and what would change your mind?" required></textarea>
+              <div class="composer-footer">
+                <span class="composer-hint">Your original text stays unchanged after saving.</span>
+                <button class="primary-button" type="submit">Save update</button>
+              </div>
+            </form>
+          </section>
+
+          <footer class="page-footer">
+            <span>Imported journal entries · no wallet credentials are stored in this browser</span>
+            <span>Freshness target: within 30 minutes after sync is connected</span>
+          </footer>
+        </div>
+      </main>
+    </div>
+    <script src="/app.js" defer></script>
+  </body>
+</html>
