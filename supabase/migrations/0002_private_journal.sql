@@ -18,7 +18,8 @@ create table public.journal_positions (
   hold_thesis_required boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (user_id, slug)
+  unique (user_id, slug),
+  unique (user_id, id)
 );
 
 create table public.journal_entries (
@@ -35,7 +36,6 @@ create table public.journal_entries (
   foreign key (user_id, journal_position_id) references public.journal_positions(user_id, id) on delete cascade
 );
 
-create unique index journal_positions_user_id_id_idx on public.journal_positions(user_id, id);
 create index journal_positions_user_status_idx on public.journal_positions(user_id, status, updated_at desc);
 create index journal_entries_user_written_idx on public.journal_entries(user_id, written_at asc);
 
