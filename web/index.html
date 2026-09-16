@@ -56,6 +56,19 @@
             <article class="metric-card"><div class="metric-label">Last sync</div><div class="metric-value metric-value-small" id="lastSyncMetric">—</div><div class="metric-note" id="lastSyncNote">Supabase</div></article>
           </section>
 
+          <section class="panel sync-setup-panel" id="syncSetupPanel" hidden>
+            <div class="panel-heading sync-setup-heading">
+              <div><p class="eyebrow">One-time setup</p><h2>GMGN autosync</h2></div>
+              <span class="sync-frequency">Every 15 min</span>
+            </div>
+            <p class="sync-setup-copy">Connect your public Robinhood wallet and GMGN read-only API key. The API key is sent directly to Supabase Vault and is never stored in the browser or GitHub.</p>
+            <form id="syncSetupForm" class="sync-setup-form">
+              <label>Robinhood wallet address<input id="syncWalletField" type="text" autocomplete="off" placeholder="0x…" required /></label>
+              <label>GMGN API key<input id="syncApiKeyField" type="password" autocomplete="off" placeholder="Read-only API key" required /></label>
+              <div class="sync-setup-actions"><span id="syncSetupMessage" class="sync-setup-message"></span><button class="primary-button" type="submit">Enable autosync</button></div>
+            </form>
+          </section>
+
           <div class="workspace-grid">
             <section class="panel positions-panel"><div class="panel-heading"><div><p class="eyebrow">Objective record</p><h2>Position episodes</h2></div><button class="text-button" id="viewAllButton" type="button">View all <span>→</span></button></div><div class="position-list" id="positionList" aria-live="polite"></div></section>
             <section class="panel timeline-panel"><div class="panel-heading timeline-heading"><div><p class="eyebrow">Subjective record</p><h2 id="timelineTitle">Thesis timeline</h2></div><button class="small-action" id="timelineAddButton" type="button">＋ Update</button></div><div class="selected-position-summary" id="selectedPositionSummary"></div><div class="timeline" id="timeline" aria-live="polite"></div><div class="timeline-empty" id="timelineEmpty" hidden><div class="empty-icon">✦</div><h3>Start the thesis timeline</h3><p>Write down what you believe before the next decision changes the trade.</p><button class="secondary-button" id="emptyAddButton" type="button">Add first thesis</button></div></section>
