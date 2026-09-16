@@ -3,8 +3,9 @@ const state = {
   user: null,
   positions: [],
   selectedId: null,
-  filter: 'all',
-  eventType: 'HOLD'
+  filter: 'open',
+  eventType: 'HOLD',
+  hasSavedSyncKey: false
 };
 
 function escapeHtml(value) {
@@ -20,6 +21,21 @@ function shortAddress(value) {
 
 function chainLabel(chain) {
   return ({ robinhood: 'Robinhood', sol: 'Solana', arc: 'ARC', bsc: 'BSC' })[chain] || String(chain || 'Unknown');
+}
+
+function viewMeta() {
+  if (state.filter === 'closed') return { eyebrow: 'Completed trades', title: 'Closed trades', copy: 'Most recently closed and updated trades first.' };
+  if (state.filter === 'gaps') return { eyebrow: 'Needs attention', title: 'Thesis gaps', copy: 'Positions missing a buy, hold, or sell thesis.' };
+  return { eyebrow: 'Active trades', title: 'Open positions', copy: 'Newest positions first. Select one to add or review its thesis.' };
+}
+
+function positionSortTime(position) {
+  const candidates = [position.lastActivityAt, position.updatedAt, position.createdAt].filter(Boolean);
+  for (const value of candidates) {
+    const time = new Date(value).getTime();
+    if (Number.isFinite(time)) return time;
+  }
+  return 0;
 }
 
 async function initSupabase() {
@@ -43,6 +59,22 @@ function showApp() {
   document.querySelector('#signedInEmail').textContent = state.user?.email || 'Authenticated';
 }
 
+function populateSavedWalletFields(wallets) {
+  const robinhood = wallets.find((wallet) => wallet.chain === 'robinhood');
+  const arc = wallets.find((wallet) => wallet.chain === 'arc');
+  const bsc = wallets.find((wallet) => wallet.chain === 'bsc');
+  const solana = wallets.filter((wallet) => wallet.chain === 'sol');
+  const sol1 = solana.find((wallet) => /#1/i.test(wallet.label || '')) || solana[0];
+  const sol2 = solana.find((wallet) => /#2/i.test(wallet.label || '')) || solana.find((wallet) => wallet.id !== sol1?.id);
+
+  const set = (id, value) => { const node = document.querySelector(id); if (node && value) node.value = value; };
+  set('#syncRobinhoodField', robinhood?.address);
+  set('#syncSolana1Field', sol1?.address);
+  set('#syncSolana2Field', sol2?.address);
+  set('#syncArcField', arc?.address);
+  set('#syncBscField', bsc?.address);
+}
+
 async function loadSyncStatus() {
   const panel = document.querySelector('#syncSetupPanel');
   const { data: wallets, error: walletError } = await state.supabase
@@ -52,6 +84,11 @@ async function loadSyncStatus() {
     .order('created_at', { ascending: true });
   if (walletError) throw walletError;
 
+  populateSavedWalletFields(wallets || []);
+  state.hasSavedSyncKey = Boolean(wallets?.length);
+  const apiKeyField = document.querySelector('#syncApiKeyField');
+  if (state.hasSavedSyncKey) apiKeyField.placeholder = 'Saved server-side · leave blank to keep it';
+
   if (!wallets?.length || wallets.length < 5) {
     panel.hidden = false;
     document.querySelector('#lastSyncMetric').textContent = wallets?.length ? `${wallets.length}/5` : 'Not set';
@@ -59,7 +96,6 @@ async function loadSyncStatus() {
     return;
   }
 
-  panel.hidden = true;
   const walletIds = wallets.map((wallet) => wallet.id);
   const { data: syncRows, error: syncError } = await state.supabase
     .from('sync_state')
@@ -69,14 +105,17 @@ async function loadSyncStatus() {
   if (syncError) throw syncError;
 
   const errors = (syncRows || []).filter((row) => row.status === 'ERROR');
+  const rateLimited = errors.length && errors.every((row) => String(row.error_code || '').includes('429'));
   if (errors.length) {
-    document.querySelector('#lastSyncMetric').textContent = `${errors.length} error${errors.length === 1 ? '' : 's'}`;
-    document.querySelector('#lastSyncNote').textContent = errors[0].error_code || 'GMGN sync failed';
-    document.querySelector('#freshnessLabel').innerHTML = '<span class="freshness-dot"></span> Sync needs attention';
+    document.querySelector('#lastSyncMetric').textContent = rateLimited ? 'Retrying' : `${errors.length} error${errors.length === 1 ? '' : 's'}`;
+    document.querySelector('#lastSyncNote').textContent = rateLimited ? 'GMGN rate limited · autosync remains saved' : (errors[0].error_code || 'GMGN sync failed');
+    document.querySelector('#freshnessLabel').innerHTML = `<span class="freshness-dot"></span> ${rateLimited ? 'Rate limited · retrying' : 'Sync needs attention'}`;
     panel.hidden = false;
+    document.querySelector('#syncSetupMessage').textContent = rateLimited ? 'Wallets and API key are saved. GMGN is rate limiting requests; autosync will retry automatically.' : 'Autosync settings are saved. Update them only if needed.';
     return;
   }
 
+  panel.hidden = true;
   const latest = (syncRows || [])
     .map((row) => row.last_success_at)
     .filter(Boolean)
@@ -94,7 +133,7 @@ async function loadJournal() {
   const { data: positions, error: positionsError } = await state.supabase
     .from('journal_positions')
     .select('*')
-    .order('created_at', { ascending: true });
+    .order('updated_at', { ascending: false });
   if (positionsError) throw positionsError;
 
   const { data: entries, error: entriesError } = await state.supabase
@@ -132,54 +171,73 @@ async function loadJournal() {
     chain: position.chain || 'robinhood',
     walletId: position.wallet_id || null,
     holdThesisRequired: Boolean(position.hold_thesis_required),
-    thesis: byPosition.get(position.id) || []
-  }));
+    thesis: byPosition.get(position.id) || [],
+    createdAt: position.created_at,
+    updatedAt: position.updated_at,
+    lastActivityAt: position.last_activity_at
+  })).sort((a, b) => positionSortTime(b) - positionSortTime(a));
 
-  if (!state.positions.some((position) => position.id === state.selectedId)) {
-    state.selectedId = state.positions[0]?.id || null;
+  const visible = filteredPositions();
+  if (!visible.some((position) => position.id === state.selectedId)) {
+    state.selectedId = visible[0]?.id || state.positions[0]?.id || null;
   }
   render();
   await loadSyncStatus();
 }
 
 function selectedPosition() {
-  return state.positions.find((position) => position.id === state.selectedId) || state.positions[0];
+  return state.positions.find((position) => position.id === state.selectedId) || filteredPositions()[0] || state.positions[0];
 }
+
 function hasEvent(position, type) { return position?.thesis?.some((event) => event.type === type); }
+
 function isThesisGap(position) {
   if (!hasEvent(position, 'BUY')) return true;
   if (position.status === 'closed' && !hasEvent(position, 'SELL')) return true;
   return Boolean(position.holdThesisRequired && !hasEvent(position, 'HOLD'));
 }
+
 function filteredPositions() {
-  return state.positions.filter((position) => {
-    if (state.filter === 'open' || state.filter === 'closed') return position.status === state.filter;
+  const filtered = state.positions.filter((position) => {
+    if (state.filter === 'open') return position.status === 'open';
+    if (state.filter === 'closed') return position.status === 'closed';
     if (state.filter === 'gaps') return isThesisGap(position);
-    return true;
+    return false;
   });
+  return filtered.sort((a, b) => positionSortTime(b) - positionSortTime(a));
 }
 
 function renderMetrics() {
   const open = state.positions.filter((position) => position.status === 'open').length;
-  const realized = state.positions.filter((position) => position.status === 'closed').reduce((total, position) => {
-    const amount = Number(String(position.pnl).replace(/[$,]/g, ''));
-    return Number.isFinite(amount) ? total + amount : total;
-  }, 0);
+  const closed = state.positions.filter((position) => position.status === 'closed').length;
   const coverage = state.positions.length
     ? Math.round((state.positions.filter((position) => hasEvent(position, 'BUY')).length / state.positions.length) * 100)
     : 0;
   document.querySelector('#openPositionsMetric').textContent = String(open);
-  document.querySelector('#realizedPnlMetric').textContent = `$${realized.toFixed(2)}`;
+  document.querySelector('#closedPositionsMetric').textContent = String(closed);
   document.querySelector('#coverageMetric').textContent = `${coverage}%`;
   document.querySelector('#coverageProgress').style.width = `${coverage}%`;
+  document.querySelector('#openCount').textContent = String(open);
+  document.querySelector('#closedCount').textContent = String(closed);
   document.querySelector('#gapCount').textContent = String(state.positions.filter(isThesisGap).length);
+}
+
+function renderViewChrome() {
+  const meta = viewMeta();
+  document.querySelector('#currentViewLabel').textContent = meta.title;
+  document.querySelector('#viewEyebrow').textContent = meta.eyebrow;
+  document.querySelector('#viewTitle').textContent = meta.title;
+  document.querySelector('#viewCopy').textContent = meta.copy;
+  document.querySelector('#positionListTitle').textContent = meta.title;
+  document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('is-active', item.dataset.filter === state.filter));
 }
 
 function renderPositionList() {
   const list = document.querySelector('#positionList');
   const positions = filteredPositions();
   if (!positions.length) {
-    list.innerHTML = '<div class="timeline-empty"><div class="empty-icon">○</div><h3>No matching positions</h3><p>Your Supabase journal is empty for this view.</p></div>';
+    const message = state.filter === 'open' ? 'No open positions yet.' : state.filter === 'closed' ? 'No closed trades yet.' : 'No thesis gaps in this view.';
+    list.innerHTML = `<div class="timeline-empty compact-empty"><div class="empty-icon">○</div><h3>${escapeHtml(message)}</h3><p>${state.filter === 'open' ? 'Add a position manually or wait for autosync.' : 'Switch views to keep journaling.'}</p></div>`;
     return;
   }
   list.innerHTML = positions.map((position) => {
@@ -201,7 +259,7 @@ function renderTimeline() {
   const timeline = document.querySelector('#timeline');
   const empty = document.querySelector('#timelineEmpty');
   if (!position) {
-    summary.innerHTML = '<span>No positions yet. Sync a wallet or add a thesis to begin.</span>';
+    summary.innerHTML = '<span>No position selected.</span>';
     timeline.innerHTML = '';
     empty.hidden = false;
     return;
@@ -222,17 +280,79 @@ function renderTimeline() {
 
 function render() {
   renderMetrics();
+  renderViewChrome();
   renderPositionList();
   renderTimeline();
-  document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('is-active', item.dataset.filter === state.filter));
 }
 
 function openComposer() {
   if (!selectedPosition()) return;
   document.querySelector('#composerPanel').classList.add('is-open');
   document.querySelector('#thesisText').focus();
+  document.querySelector('#composerPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
+
 function closeComposer() { document.querySelector('#composerPanel').classList.remove('is-open'); }
+
+function openNewPosition() {
+  document.querySelector('#newPositionPanel').hidden = false;
+  document.querySelector('#newPositionSymbol').focus();
+  document.querySelector('#newPositionPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeNewPosition() { document.querySelector('#newPositionPanel').hidden = true; }
+
+async function saveNewPosition(event) {
+  event.preventDefault();
+  const symbol = document.querySelector('#newPositionSymbol').value.trim();
+  const chain = document.querySelector('#newPositionChain').value;
+  let tokenAddress = document.querySelector('#newPositionContract').value.trim() || null;
+  const size = document.querySelector('#newPositionSize').value.trim();
+  const thesis = document.querySelector('#newPositionThesis').value.trim();
+  if (!symbol || !thesis) return;
+  if (tokenAddress && chain !== 'sol') tokenAddress = tokenAddress.toLowerCase();
+
+  const now = new Date();
+  const openedLabel = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const slugBase = symbol.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'position';
+  const slug = `${slugBase}-${chain}-${Date.now().toString(36)}`;
+
+  const { data: position, error: positionError } = await state.supabase.from('journal_positions').insert({
+    user_id: state.user.id,
+    slug,
+    symbol,
+    short_label: symbol.slice(0, 2).toUpperCase(),
+    status: 'OPEN',
+    opened_label: openedLabel,
+    size_label: size || 'Manual entry',
+    value_label: 'Manual position',
+    hold_thesis_required: false,
+    token_address: tokenAddress,
+    chain,
+    source: 'manual',
+    sync_source: 'manual'
+  }).select('id').single();
+  if (positionError) return window.alert(`Unable to create position: ${positionError.message}`);
+
+  const { error: thesisError } = await state.supabase.from('journal_entries').insert({
+    user_id: state.user.id,
+    journal_position_id: position.id,
+    kind: 'BUY',
+    original_text: thesis,
+    display_date: openedLabel,
+    context_label: size ? `Entry · ${size}` : 'Manual entry'
+  });
+  if (thesisError) {
+    await state.supabase.from('journal_positions').delete().eq('id', position.id);
+    return window.alert(`Unable to save buy thesis: ${thesisError.message}`);
+  }
+
+  document.querySelector('#newPositionForm').reset();
+  closeNewPosition();
+  state.filter = 'open';
+  state.selectedId = position.id;
+  await loadJournal();
+}
 
 async function saveThesis(event) {
   event.preventDefault();
@@ -270,7 +390,11 @@ async function saveSyncSetup(event) {
     { chain: 'bsc', address: document.querySelector('#syncBscField').value.trim(), label: 'Binance / BSC wallet' }
   ];
   const message = document.querySelector('#syncSetupMessage');
-  message.textContent = 'Connecting 5 wallets…';
+  if (!apiKey && state.hasSavedSyncKey) {
+    message.textContent = 'Wallet addresses are already saved. Enter a new GMGN key only if you want to replace the saved one.';
+    return;
+  }
+  message.textContent = 'Saving 5 wallets…';
   const { data, error } = await state.supabase.functions.invoke('journal-config', {
     body: { wallets, gmgn_api_key: apiKey }
   });
@@ -279,7 +403,8 @@ async function saveSyncSetup(event) {
     return;
   }
   document.querySelector('#syncApiKeyField').value = '';
-  message.textContent = data?.sync_triggered ? 'Connected. First multi-chain sync started.' : 'Connected. Next sync is within 15 minutes.';
+  state.hasSavedSyncKey = true;
+  message.textContent = data?.sync_triggered ? 'Saved. First multi-chain sync started.' : 'Saved. Next sync is within 15 minutes.';
   window.setTimeout(() => loadJournal().catch(console.error), 3500);
 }
 
@@ -328,7 +453,9 @@ document.querySelector('#positionList').addEventListener('click', (event) => {
 document.querySelectorAll('.nav-item').forEach((item) => item.addEventListener('click', () => {
   state.filter = item.dataset.filter;
   const visible = filteredPositions();
-  if (visible.length && !visible.some((position) => position.id === state.selectedId)) state.selectedId = visible[0].id;
+  state.selectedId = visible[0]?.id || null;
+  closeComposer();
+  closeNewPosition();
   render();
 }));
 document.querySelectorAll('.event-type').forEach((button) => button.addEventListener('click', () => {
@@ -337,12 +464,15 @@ document.querySelectorAll('.event-type').forEach((button) => button.addEventList
   document.querySelectorAll('.event-type').forEach((item) => item.classList.toggle('is-selected', item === button));
 }));
 document.querySelector('#thesisForm').addEventListener('submit', saveThesis);
+document.querySelector('#newPositionForm').addEventListener('submit', saveNewPosition);
 document.querySelector('#syncSetupForm').addEventListener('submit', saveSyncSetup);
+document.querySelector('#newPositionButton').addEventListener('click', openNewPosition);
+document.querySelector('#sidebarNewPositionButton').addEventListener('click', openNewPosition);
+document.querySelector('#closeNewPositionButton').addEventListener('click', closeNewPosition);
 document.querySelector('#newThesisButton').addEventListener('click', openComposer);
 document.querySelector('#timelineAddButton').addEventListener('click', openComposer);
 document.querySelector('#emptyAddButton').addEventListener('click', openComposer);
 document.querySelector('#closeComposerButton').addEventListener('click', closeComposer);
 document.querySelector('#refreshButton').addEventListener('click', loadJournal);
-document.querySelector('#viewAllButton').addEventListener('click', () => { state.filter = 'all'; render(); });
 
 boot();
