@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#101114" />
-    <meta name="description" content="A private trading journal built around objective fills and an immutable thesis timeline." />
+    <meta name="description" content="A private multi-chain trading journal built around objective fills and an immutable thesis timeline." />
     <title>Private Trading Journal</title>
     <link rel="stylesheet" href="/styles.css" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -12,7 +12,7 @@
   <body>
     <section class="auth-screen" id="authScreen">
       <form class="auth-card" id="loginForm">
-        <div class="brand-mark auth-mark" aria-hidden="true">R</div>
+        <div class="brand-mark auth-mark" aria-hidden="true">T</div>
         <p class="eyebrow">Private workspace</p>
         <h1>Trading Journal</h1>
         <p class="auth-copy">Sign in to view or edit your journal. New account registration is intentionally disabled.</p>
@@ -25,7 +25,7 @@
 
     <div class="app-shell" id="appShell" hidden>
       <aside class="sidebar" aria-label="Journal navigation">
-        <div class="brand-lockup"><div class="brand-mark" aria-hidden="true">R</div><div><div class="brand-name">Robinhood</div><div class="brand-subtitle">Trading journal</div></div></div>
+        <div class="brand-lockup"><div class="brand-mark" aria-hidden="true">T</div><div><div class="brand-name">Multi-chain</div><div class="brand-subtitle">Trading journal</div></div></div>
         <nav class="primary-nav" aria-label="Primary">
           <button class="nav-item is-active" data-filter="all" type="button"><span class="nav-icon">◈</span>Overview</button>
           <button class="nav-item" data-filter="open" type="button"><span class="nav-icon">↗</span>Open positions</button>
@@ -34,7 +34,7 @@
         </nav>
         <div class="sidebar-spacer"></div>
         <div class="sync-card"><div class="sync-card-heading"><span class="status-dot"></span> Supabase secured</div><p>Journal rows are protected by authenticated row-level security.</p><span class="sync-card-link" id="signedInEmail"></span></div>
-        <div class="sidebar-footer"><span>Robinhood Chain</span><span class="chain-pill">4663</span></div>
+        <div class="sidebar-footer"><span>Multi-chain</span><span class="chain-pill">5 wallets</span></div>
       </aside>
 
       <main class="main-content">
@@ -58,14 +58,20 @@
 
           <section class="panel sync-setup-panel" id="syncSetupPanel" hidden>
             <div class="panel-heading sync-setup-heading">
-              <div><p class="eyebrow">One-time setup</p><h2>GMGN autosync</h2></div>
+              <div><p class="eyebrow">Autosync setup</p><h2>GMGN multi-chain wallets</h2></div>
               <span class="sync-frequency">Every 15 min</span>
             </div>
-            <p class="sync-setup-copy">Connect your public Robinhood wallet and GMGN read-only API key. The API key is sent directly to Supabase Vault and is never stored in the browser or GitHub.</p>
+            <p class="sync-setup-copy">Configure your five public trading wallets once. GMGN is read-only here; the API key is stored server-side and never committed to GitHub.</p>
             <form id="syncSetupForm" class="sync-setup-form">
-              <label>Robinhood wallet address<input id="syncWalletField" type="text" autocomplete="off" placeholder="0x…" required /></label>
-              <label>GMGN API key<input id="syncApiKeyField" type="password" autocomplete="off" placeholder="Read-only API key" required /></label>
-              <div class="sync-setup-actions"><span id="syncSetupMessage" class="sync-setup-message"></span><button class="primary-button" type="submit">Enable autosync</button></div>
+              <div class="wallet-grid">
+                <label>Robinhood wallet<input id="syncRobinhoodField" type="text" autocomplete="off" placeholder="0x…" required /></label>
+                <label>Solana wallet #1<input id="syncSolana1Field" type="text" autocomplete="off" placeholder="Base58 address" required /></label>
+                <label>Solana wallet #2<input id="syncSolana2Field" type="text" autocomplete="off" placeholder="Base58 address" required /></label>
+                <label>ARC wallet<input id="syncArcField" type="text" autocomplete="off" placeholder="0x…" required /></label>
+                <label>Binance / BSC wallet<input id="syncBscField" type="text" autocomplete="off" placeholder="0x…" required /></label>
+              </div>
+              <label>GMGN read-only API key<input id="syncApiKeyField" type="password" autocomplete="off" placeholder="GMGN API key" required /></label>
+              <div class="sync-setup-actions"><span id="syncSetupMessage" class="sync-setup-message"></span><button class="primary-button" type="submit">Enable multi-chain autosync</button></div>
             </form>
           </section>
 
@@ -75,7 +81,7 @@
           </div>
 
           <section class="composer-panel panel" id="composerPanel"><div class="composer-heading"><div><p class="eyebrow">Write it as you see it now</p><h2>Add a thesis update</h2></div><button class="close-button" id="closeComposerButton" type="button" aria-label="Close thesis editor">×</button></div><form id="thesisForm"><div class="composer-toolbar"><div class="event-type-group" role="group" aria-label="Thesis type"><button class="event-type is-selected" data-event-type="HOLD" type="button">Hold thesis</button><button class="event-type" data-event-type="BUY" type="button">Buy thesis</button><button class="event-type" data-event-type="SELL" type="button">Sell thesis</button><button class="event-type" data-event-type="GENERAL_THOUGHT" type="button">General thought</button></div><label class="confidence-field">Confidence<select id="confidenceField"><option value="">Optional</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label></div><input type="hidden" id="eventTypeField" value="HOLD" /><label class="sr-only" for="thesisText">Thesis update</label><textarea id="thesisText" rows="4" placeholder="What are you seeing, and what would change your mind?" required></textarea><div class="composer-footer"><span class="composer-hint">Your original text stays unchanged after saving.</span><button class="primary-button" type="submit">Save update</button></div></form></section>
-          <footer class="page-footer"><span>Private Supabase journal · authenticated access only</span><span>RLS ownership enforced per user</span></footer>
+          <footer class="page-footer"><span>Private Supabase journal · authenticated access only</span><span>Robinhood · Solana · ARC · BSC</span></footer>
         </div>
       </main>
     </div>
