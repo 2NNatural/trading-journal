@@ -18,6 +18,10 @@ function shortAddress(value) {
   return `${value.slice(0, 6)}…${value.slice(-4)}`;
 }
 
+function chainLabel(chain) {
+  return ({ robinhood: 'Robinhood', sol: 'Solana', arc: 'ARC', bsc: 'BSC' })[chain] || String(chain || 'Unknown');
+}
+
 async function initSupabase() {
   const response = await fetch('/api/config');
   const config = await response.json();
@@ -43,49 +47,47 @@ async function loadSyncStatus() {
   const panel = document.querySelector('#syncSetupPanel');
   const { data: wallets, error: walletError } = await state.supabase
     .from('wallets')
-    .select('id,address,sync_enabled')
+    .select('id,address,chain,label,sync_enabled')
     .eq('sync_enabled', true)
-    .limit(1);
+    .order('created_at', { ascending: true });
   if (walletError) throw walletError;
 
-  if (!wallets?.length) {
+  if (!wallets?.length || wallets.length < 5) {
     panel.hidden = false;
-    document.querySelector('#lastSyncMetric').textContent = 'Not set';
-    document.querySelector('#lastSyncNote').textContent = 'Connect GMGN autosync';
+    document.querySelector('#lastSyncMetric').textContent = wallets?.length ? `${wallets.length}/5` : 'Not set';
+    document.querySelector('#lastSyncNote').textContent = 'Configure all multi-chain wallets';
     return;
   }
 
   panel.hidden = true;
-  const wallet = wallets[0];
+  const walletIds = wallets.map((wallet) => wallet.id);
   const { data: syncRows, error: syncError } = await state.supabase
     .from('sync_state')
-    .select('last_success_at,last_attempt_at,status,error_code')
-    .eq('wallet_id', wallet.id)
-    .eq('source', 'gmgn')
-    .order('updated_at', { ascending: false })
-    .limit(1);
+    .select('wallet_id,last_success_at,last_attempt_at,status,error_code,source')
+    .in('wallet_id', walletIds)
+    .order('updated_at', { ascending: false });
   if (syncError) throw syncError;
 
-  const sync = syncRows?.[0];
-  if (!sync) {
-    document.querySelector('#lastSyncMetric').textContent = 'Pending';
-    document.querySelector('#lastSyncNote').textContent = `${shortAddress(wallet.address)} · every 15 min`;
-    return;
-  }
-
-  if (sync.status === 'ERROR') {
-    document.querySelector('#lastSyncMetric').textContent = 'Error';
-    document.querySelector('#lastSyncNote').textContent = sync.error_code || 'GMGN sync failed';
+  const errors = (syncRows || []).filter((row) => row.status === 'ERROR');
+  if (errors.length) {
+    document.querySelector('#lastSyncMetric').textContent = `${errors.length} error${errors.length === 1 ? '' : 's'}`;
+    document.querySelector('#lastSyncNote').textContent = errors[0].error_code || 'GMGN sync failed';
     document.querySelector('#freshnessLabel').innerHTML = '<span class="freshness-dot"></span> Sync needs attention';
+    panel.hidden = false;
     return;
   }
 
-  const syncedAt = sync.last_success_at ? new Date(sync.last_success_at) : null;
-  document.querySelector('#lastSyncMetric').textContent = syncedAt
-    ? syncedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const latest = (syncRows || [])
+    .map((row) => row.last_success_at)
+    .filter(Boolean)
+    .map((value) => new Date(value))
+    .sort((a, b) => b - a)[0];
+
+  document.querySelector('#lastSyncMetric').textContent = latest
+    ? latest.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
     : 'Pending';
-  document.querySelector('#lastSyncNote').textContent = `${shortAddress(wallet.address)} · every 15 min`;
-  document.querySelector('#freshnessLabel').innerHTML = '<span class="freshness-dot"></span> GMGN autosync';
+  document.querySelector('#lastSyncNote').textContent = `${wallets.length} wallets · every 15 min`;
+  document.querySelector('#freshnessLabel').innerHTML = '<span class="freshness-dot"></span> Multi-chain GMGN autosync';
 }
 
 async function loadJournal() {
@@ -127,6 +129,8 @@ async function loadJournal() {
     pnlPercent: position.pnl_percent_label || '—',
     value: position.value_label || 'Not synced',
     tokenAddress: position.token_address || null,
+    chain: position.chain || 'robinhood',
+    walletId: position.wallet_id || null,
     holdThesisRequired: Boolean(position.hold_thesis_required),
     thesis: byPosition.get(position.id) || []
   }));
@@ -141,17 +145,12 @@ async function loadJournal() {
 function selectedPosition() {
   return state.positions.find((position) => position.id === state.selectedId) || state.positions[0];
 }
-
-function hasEvent(position, type) {
-  return position?.thesis?.some((event) => event.type === type);
-}
-
+function hasEvent(position, type) { return position?.thesis?.some((event) => event.type === type); }
 function isThesisGap(position) {
   if (!hasEvent(position, 'BUY')) return true;
   if (position.status === 'closed' && !hasEvent(position, 'SELL')) return true;
   return Boolean(position.holdThesisRequired && !hasEvent(position, 'HOLD'));
 }
-
 function filteredPositions() {
   return state.positions.filter((position) => {
     if (state.filter === 'open' || state.filter === 'closed') return position.status === state.filter;
@@ -189,7 +188,7 @@ function renderPositionList() {
     <button class="position-row ${position.id === state.selectedId ? 'is-selected' : ''}" data-position-id="${escapeHtml(position.id)}" type="button">
       <span class="position-primary">
         <span class="token-icon ${escapeHtml(position.iconClass)}">${escapeHtml(position.short)}</span>
-        <span><span class="position-name">${escapeHtml(position.symbol)}</span><span class="position-meta">${escapeHtml(position.opened)} · ${escapeHtml(position.size)}${escapeHtml(contract)}</span></span>
+        <span><span class="position-name">${escapeHtml(position.symbol)} <span class="chain-tag">${escapeHtml(chainLabel(position.chain))}</span></span><span class="position-meta">${escapeHtml(position.opened)} · ${escapeHtml(position.size)}${escapeHtml(contract)}</span></span>
       </span>
       <span class="position-right"><span class="position-pnl ${String(position.pnl).startsWith('-') ? 'negative' : 'positive'}">${escapeHtml(position.pnl)}</span><span class="position-status ${escapeHtml(position.status)}">${escapeHtml(position.holdThesisRequired && !hasEvent(position, 'HOLD') ? 'hold thesis needed' : position.status)}</span></span>
     </button>`;
@@ -202,13 +201,13 @@ function renderTimeline() {
   const timeline = document.querySelector('#timeline');
   const empty = document.querySelector('#timelineEmpty');
   if (!position) {
-    summary.innerHTML = '<span>No positions yet. Seed or import your private journal data first.</span>';
+    summary.innerHTML = '<span>No positions yet. Sync a wallet or add a thesis to begin.</span>';
     timeline.innerHTML = '';
     empty.hidden = false;
     return;
   }
   const contract = position.tokenAddress ? ` · ${shortAddress(position.tokenAddress)}` : '';
-  summary.innerHTML = `<div class="summary-token"><span class="token-icon ${escapeHtml(position.iconClass)}">${escapeHtml(position.short)}</span><div><strong>${escapeHtml(position.symbol)}</strong><span>${escapeHtml(position.opened)} · ${escapeHtml(position.size)}${escapeHtml(contract)}</span></div></div><div class="summary-value"><strong>${escapeHtml(position.value)}</strong><span class="${position.holdThesisRequired && !hasEvent(position, 'HOLD') ? 'summary-hold-note' : ''}">${position.holdThesisRequired && !hasEvent(position, 'HOLD') ? 'Hold thesis needed' : escapeHtml(position.status)}</span></div>`;
+  summary.innerHTML = `<div class="summary-token"><span class="token-icon ${escapeHtml(position.iconClass)}">${escapeHtml(position.short)}</span><div><strong>${escapeHtml(position.symbol)} <span class="chain-tag">${escapeHtml(chainLabel(position.chain))}</span></strong><span>${escapeHtml(position.opened)} · ${escapeHtml(position.size)}${escapeHtml(contract)}</span></div></div><div class="summary-value"><strong>${escapeHtml(position.value)}</strong><span class="${position.holdThesisRequired && !hasEvent(position, 'HOLD') ? 'summary-hold-note' : ''}">${position.holdThesisRequired && !hasEvent(position, 'HOLD') ? 'Hold thesis needed' : escapeHtml(position.status)}</span></div>`;
   if (!position.thesis.length) {
     timeline.innerHTML = '';
     empty.hidden = false;
@@ -233,10 +232,7 @@ function openComposer() {
   document.querySelector('#composerPanel').classList.add('is-open');
   document.querySelector('#thesisText').focus();
 }
-
-function closeComposer() {
-  document.querySelector('#composerPanel').classList.remove('is-open');
-}
+function closeComposer() { document.querySelector('#composerPanel').classList.remove('is-open'); }
 
 async function saveThesis(event) {
   event.preventDefault();
@@ -253,10 +249,7 @@ async function saveThesis(event) {
     display_date: 'Just now',
     context_label: 'Personal note'
   });
-  if (error) {
-    window.alert(`Unable to save: ${error.message}`);
-    return;
-  }
+  if (error) return window.alert(`Unable to save: ${error.message}`);
   if (state.eventType === 'HOLD' && position.holdThesisRequired) {
     await state.supabase.from('journal_positions').update({ hold_thesis_required: false }).eq('id', position.id);
   }
@@ -268,20 +261,26 @@ async function saveThesis(event) {
 
 async function saveSyncSetup(event) {
   event.preventDefault();
-  const wallet = document.querySelector('#syncWalletField').value.trim();
   const apiKey = document.querySelector('#syncApiKeyField').value.trim();
+  const wallets = [
+    { chain: 'robinhood', address: document.querySelector('#syncRobinhoodField').value.trim(), label: 'Robinhood wallet' },
+    { chain: 'sol', address: document.querySelector('#syncSolana1Field').value.trim(), label: 'Solana wallet #1' },
+    { chain: 'sol', address: document.querySelector('#syncSolana2Field').value.trim(), label: 'Solana wallet #2' },
+    { chain: 'arc', address: document.querySelector('#syncArcField').value.trim(), label: 'ARC wallet' },
+    { chain: 'bsc', address: document.querySelector('#syncBscField').value.trim(), label: 'Binance / BSC wallet' }
+  ];
   const message = document.querySelector('#syncSetupMessage');
-  message.textContent = 'Connecting…';
+  message.textContent = 'Connecting 5 wallets…';
   const { data, error } = await state.supabase.functions.invoke('journal-config', {
-    body: { wallet_address: wallet, gmgn_api_key: apiKey }
+    body: { wallets, gmgn_api_key: apiKey }
   });
   if (error || data?.error) {
     message.textContent = data?.error || error?.message || 'Unable to configure autosync.';
     return;
   }
   document.querySelector('#syncApiKeyField').value = '';
-  message.textContent = data?.sync_triggered ? 'Connected. First sync started.' : 'Connected. Next sync is within 15 minutes.';
-  window.setTimeout(() => loadJournal().catch(console.error), 2500);
+  message.textContent = data?.sync_triggered ? 'Connected. First multi-chain sync started.' : 'Connected. Next sync is within 15 minutes.';
+  window.setTimeout(() => loadJournal().catch(console.error), 3500);
 }
 
 async function signIn(event) {
