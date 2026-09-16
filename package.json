@@ -10,7 +10,7 @@
     "phase1": "node --disable-warning=ExperimentalWarning scripts/phase1/run.ts",
     "test": "node --test scripts/phase1/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "web:check": "node --check web/app.js && node --check api/health.js",
+    "web:check": "node --check web/app.js && node --check api/health.js && node --check api/config.js",
     "web:dev": "python3 -m http.server 3000 --directory web"
   },
   "dependencies": {
