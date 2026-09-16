@@ -13,6 +13,11 @@ function escapeHtml(value) {
   }[character]));
 }
 
+function shortAddress(value) {
+  if (!value) return '';
+  return `${value.slice(0, 6)}…${value.slice(-4)}`;
+}
+
 async function initSupabase() {
   const response = await fetch('/api/config');
   const config = await response.json();
@@ -32,6 +37,55 @@ function showApp() {
   document.querySelector('#authScreen').hidden = true;
   document.querySelector('#appShell').hidden = false;
   document.querySelector('#signedInEmail').textContent = state.user?.email || 'Authenticated';
+}
+
+async function loadSyncStatus() {
+  const panel = document.querySelector('#syncSetupPanel');
+  const { data: wallets, error: walletError } = await state.supabase
+    .from('wallets')
+    .select('id,address,sync_enabled')
+    .eq('sync_enabled', true)
+    .limit(1);
+  if (walletError) throw walletError;
+
+  if (!wallets?.length) {
+    panel.hidden = false;
+    document.querySelector('#lastSyncMetric').textContent = 'Not set';
+    document.querySelector('#lastSyncNote').textContent = 'Connect GMGN autosync';
+    return;
+  }
+
+  panel.hidden = true;
+  const wallet = wallets[0];
+  const { data: syncRows, error: syncError } = await state.supabase
+    .from('sync_state')
+    .select('last_success_at,last_attempt_at,status,error_code')
+    .eq('wallet_id', wallet.id)
+    .eq('source', 'gmgn')
+    .order('updated_at', { ascending: false })
+    .limit(1);
+  if (syncError) throw syncError;
+
+  const sync = syncRows?.[0];
+  if (!sync) {
+    document.querySelector('#lastSyncMetric').textContent = 'Pending';
+    document.querySelector('#lastSyncNote').textContent = `${shortAddress(wallet.address)} · every 15 min`;
+    return;
+  }
+
+  if (sync.status === 'ERROR') {
+    document.querySelector('#lastSyncMetric').textContent = 'Error';
+    document.querySelector('#lastSyncNote').textContent = sync.error_code || 'GMGN sync failed';
+    document.querySelector('#freshnessLabel').innerHTML = '<span class="freshness-dot"></span> Sync needs attention';
+    return;
+  }
+
+  const syncedAt = sync.last_success_at ? new Date(sync.last_success_at) : null;
+  document.querySelector('#lastSyncMetric').textContent = syncedAt
+    ? syncedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    : 'Pending';
+  document.querySelector('#lastSyncNote').textContent = `${shortAddress(wallet.address)} · every 15 min`;
+  document.querySelector('#freshnessLabel').innerHTML = '<span class="freshness-dot"></span> GMGN autosync';
 }
 
 async function loadJournal() {
@@ -72,6 +126,7 @@ async function loadJournal() {
     pnl: position.pnl_label || '—',
     pnlPercent: position.pnl_percent_label || '—',
     value: position.value_label || 'Not synced',
+    tokenAddress: position.token_address || null,
     holdThesisRequired: Boolean(position.hold_thesis_required),
     thesis: byPosition.get(position.id) || []
   }));
@@ -80,6 +135,7 @@ async function loadJournal() {
     state.selectedId = state.positions[0]?.id || null;
   }
   render();
+  await loadSyncStatus();
 }
 
 function selectedPosition() {
@@ -118,8 +174,6 @@ function renderMetrics() {
   document.querySelector('#coverageMetric').textContent = `${coverage}%`;
   document.querySelector('#coverageProgress').style.width = `${coverage}%`;
   document.querySelector('#gapCount').textContent = String(state.positions.filter(isThesisGap).length);
-  document.querySelector('#lastSyncMetric').textContent = 'Live';
-  document.querySelector('#lastSyncNote').textContent = `${state.positions.length} private positions`;
 }
 
 function renderPositionList() {
@@ -129,14 +183,17 @@ function renderPositionList() {
     list.innerHTML = '<div class="timeline-empty"><div class="empty-icon">○</div><h3>No matching positions</h3><p>Your Supabase journal is empty for this view.</p></div>';
     return;
   }
-  list.innerHTML = positions.map((position) => `
+  list.innerHTML = positions.map((position) => {
+    const contract = position.tokenAddress ? ` · ${shortAddress(position.tokenAddress)}` : '';
+    return `
     <button class="position-row ${position.id === state.selectedId ? 'is-selected' : ''}" data-position-id="${escapeHtml(position.id)}" type="button">
       <span class="position-primary">
         <span class="token-icon ${escapeHtml(position.iconClass)}">${escapeHtml(position.short)}</span>
-        <span><span class="position-name">${escapeHtml(position.symbol)}</span><span class="position-meta">${escapeHtml(position.opened)} · ${escapeHtml(position.size)}</span></span>
+        <span><span class="position-name">${escapeHtml(position.symbol)}</span><span class="position-meta">${escapeHtml(position.opened)} · ${escapeHtml(position.size)}${escapeHtml(contract)}</span></span>
       </span>
       <span class="position-right"><span class="position-pnl ${String(position.pnl).startsWith('-') ? 'negative' : 'positive'}">${escapeHtml(position.pnl)}</span><span class="position-status ${escapeHtml(position.status)}">${escapeHtml(position.holdThesisRequired && !hasEvent(position, 'HOLD') ? 'hold thesis needed' : position.status)}</span></span>
-    </button>`).join('');
+    </button>`;
+  }).join('');
 }
 
 function renderTimeline() {
@@ -150,7 +207,8 @@ function renderTimeline() {
     empty.hidden = false;
     return;
   }
-  summary.innerHTML = `<div class="summary-token"><span class="token-icon ${escapeHtml(position.iconClass)}">${escapeHtml(position.short)}</span><div><strong>${escapeHtml(position.symbol)}</strong><span>${escapeHtml(position.opened)} · ${escapeHtml(position.size)}</span></div></div><div class="summary-value"><strong>${escapeHtml(position.value)}</strong><span class="${position.holdThesisRequired && !hasEvent(position, 'HOLD') ? 'summary-hold-note' : ''}">${position.holdThesisRequired && !hasEvent(position, 'HOLD') ? 'Hold thesis needed' : escapeHtml(position.status)}</span></div>`;
+  const contract = position.tokenAddress ? ` · ${shortAddress(position.tokenAddress)}` : '';
+  summary.innerHTML = `<div class="summary-token"><span class="token-icon ${escapeHtml(position.iconClass)}">${escapeHtml(position.short)}</span><div><strong>${escapeHtml(position.symbol)}</strong><span>${escapeHtml(position.opened)} · ${escapeHtml(position.size)}${escapeHtml(contract)}</span></div></div><div class="summary-value"><strong>${escapeHtml(position.value)}</strong><span class="${position.holdThesisRequired && !hasEvent(position, 'HOLD') ? 'summary-hold-note' : ''}">${position.holdThesisRequired && !hasEvent(position, 'HOLD') ? 'Hold thesis needed' : escapeHtml(position.status)}</span></div>`;
   if (!position.thesis.length) {
     timeline.innerHTML = '';
     empty.hidden = false;
@@ -208,6 +266,24 @@ async function saveThesis(event) {
   await loadJournal();
 }
 
+async function saveSyncSetup(event) {
+  event.preventDefault();
+  const wallet = document.querySelector('#syncWalletField').value.trim();
+  const apiKey = document.querySelector('#syncApiKeyField').value.trim();
+  const message = document.querySelector('#syncSetupMessage');
+  message.textContent = 'Connecting…';
+  const { data, error } = await state.supabase.functions.invoke('journal-config', {
+    body: { wallet_address: wallet, gmgn_api_key: apiKey }
+  });
+  if (error || data?.error) {
+    message.textContent = data?.error || error?.message || 'Unable to configure autosync.';
+    return;
+  }
+  document.querySelector('#syncApiKeyField').value = '';
+  message.textContent = data?.sync_triggered ? 'Connected. First sync started.' : 'Connected. Next sync is within 15 minutes.';
+  window.setTimeout(() => loadJournal().catch(console.error), 2500);
+}
+
 async function signIn(event) {
   event.preventDefault();
   document.querySelector('#authError').textContent = '';
@@ -262,6 +338,7 @@ document.querySelectorAll('.event-type').forEach((button) => button.addEventList
   document.querySelectorAll('.event-type').forEach((item) => item.classList.toggle('is-selected', item === button));
 }));
 document.querySelector('#thesisForm').addEventListener('submit', saveThesis);
+document.querySelector('#syncSetupForm').addEventListener('submit', saveSyncSetup);
 document.querySelector('#newThesisButton').addEventListener('click', openComposer);
 document.querySelector('#timelineAddButton').addEventListener('click', openComposer);
 document.querySelector('#emptyAddButton').addEventListener('click', openComposer);
