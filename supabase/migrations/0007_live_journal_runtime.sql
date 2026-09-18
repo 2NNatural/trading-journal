@@ -10,6 +10,14 @@ alter table public.wallets
   add column if not exists last_sync_status text,
   add column if not exists last_sync_error text;
 
+alter table public.wallets drop constraint if exists wallets_chain_id_check;
+alter table public.wallets add constraint wallets_chain_id_check check (
+  (chain='robinhood' and chain_id=4663)
+  or (chain='arc' and (chain_id is null or chain_id=5042))
+  or (chain='bsc' and (chain_id is null or chain_id=56))
+  or (chain='sol' and chain_id is null)
+);
+
 alter table public.sync_state
   add column if not exists retry_after timestamptz;
 
