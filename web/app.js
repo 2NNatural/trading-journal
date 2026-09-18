@@ -210,7 +210,7 @@ function cardHtml(position) {
       <div class="trade-title">
         <div class="token-badge">${escapeHtml((symbol || '??').slice(0,2).toUpperCase())}</div>
         <div>
-          <div class="trade-name">${escapeHtml(symbol)}</div>
+          <div class="trade-name">${escapeHtml(symbol)}${position.token_name ? ` — ${escapeHtml(position.token_name)}` : ''}</div>
           <div class="trade-meta">${escapeHtml(formatTime(opened))} · ${escapeHtml(chainLabel(position.chain))}</div>
         </div>
       </div>
