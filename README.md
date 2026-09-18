@@ -1,30 +1,161 @@
-# Trading Journal — Phase 1 validation
+# Live Trading Journal
 
-Planning deliverables for a read-only Robinhood Chain journal centered on immutable thesis timelines.
+A private, read-only trading journal for fast crypto traders.
 
-**Budget: $0 recurring service cost.** The private journal will use Vercel Hobby for the website and Supabase Free for storage/scheduled sync. The [free-only implementation constraint](docs/FREE_IMPLEMENTATION.md) supersedes earlier paid-service assumptions. SolidRPC Free now serves live native traces; Alchemy Free continues serving archive and indexed reads.
+The goal is simple:
 
-- [Architecture and phase-by-phase plan](docs/ARCHITECTURE.md)
-- [Phase 1 only coding prompt](docs/PHASE1_CODING_PROMPT.md)
-- [Research evidence and test limitations](research/README.md)
-- [Evidence manifest](research/manifest.json)
-- [Live Phase 1 results and remaining gates](docs/PHASE1_RESULTS.md)
-- [Harness commands and operating limits](docs/PHASE1_RUNBOOK.md)
+1. **Buy a token.**
+2. Immediately write **why you bought it**.
+3. The journal catches up from the chain and automatically adds context such as:
+   - ticker + token name
+   - amount bought
+   - amount spent
+   - effective entry price
+   - current holdings
+   - current USD value
+   - realized/unrealized P&L when it can be reconstructed reliably
+4. Sell whenever you want. **Exit notes are optional.**
 
-Current gate: **HYBRID_REQUIRED — Phase 2 closed**. Authentication works. The harness captured 457 default activity rows and checked 20 trade rows against receipts. A transfer/balance anomaly is explained and quarantined. All 20 sampled native cashflows reconcile against transaction state and archive balances using free RPCs; historical USD, routed token fees and latency validation remain pending. See the results for the passing checks and remaining gates.
+There is no required "thesis completion" workflow and no private key is ever needed.
 
-The Phase 1 TypeScript harness is implemented under `scripts/phase1`. The journal MVP is now the next implementation step; it will start with a read-only fixture backed by the validated evidence, then add Supabase persistence. Exact live responses are kept in ignored, private `research/phase1` run directories. Synthetic tests are labeled separately.
+## Supported chains
 
-## Journal MVP
+- Robinhood Chain
+- Solana
+- ARC
+- BNB Smart Chain / BSC
 
-The Vercel-compatible shell is in [`web/`](</Users/noahneri/Documents/ChatGPT/Trading Journal/web/README.md>). It starts with the initial Sep 10–11 trade notes, marks the imported legacy holdings that still need hold theses, and provides an immutable-style thesis timeline plus a local draft workflow without putting wallet credentials or private evidence in the browser bundle.
+The sync is incremental. It stores a cursor for each wallet and processes only new activity instead of repeatedly re-indexing wallet history.
 
-Run it locally with `npm run web:dev`, then open `http://localhost:3000`. `npm run web:check` validates the browser and Vercel function scripts. To deploy the current shell, import this repository into a Vercel Hobby project using the checked-in `vercel.json`; it serves `web/` and exposes `/api/health`. The initial private database schema is in [`supabase/migrations/0001_journal.sql`](</Users/noahneri/Documents/ChatGPT/Trading Journal/supabase/migrations/0001_journal.sql>). Live wallet syncing will be added through Supabase Free and will use a 15-minute schedule with a 30-minute stale threshold.
+## Fastest setup: give this repo to an AI
 
-## Add your inputs
+This is the intended setup path for nontechnical users.
 
-1. Fill `TEST_WALLET` and `GMGN_API_KEY` in `.env.local`. Optional Alchemy/RPC credentials go there too.
-2. Add any known transaction examples, GMGN plan details and preferences to `docs/PROJECT_INPUTS.local.md`.
-3. Use the runbook to reproduce or extend Phase 1 validation.
+### What you need
 
-Both local input files are excluded from Git. `.env.example` is a safe blank template. The harness loads these settings and rejects `GMGN_PRIVATE_KEY`. It uses read-only endpoints and stops after each bounded command.
+- A GitHub account with access to this repository
+- A free Supabase account/project
+- A free Vercel account
+- Your **public wallet addresses**
+- An email/password you want to use to sign into your private journal
+
+> **Never provide a seed phrase, private key, trading key, or wallet-signing permission.**
+> This app is read-only. Public wallet addresses are enough.
+
+### Copy/paste this into ChatGPT, Claude, Codex, or another coding agent
+
+```text
+Set up this trading-journal repository for me end-to-end.
+
+Repository:
+https://github.com/2NNatural/trading-journal
+
+First read docs/AI_SETUP_PROMPT.md and follow it exactly.
+
+I am not technical. Do the setup work directly using connected GitHub, Supabase, and Vercel tools when available. Do not give me a long coding tutorial.
+
+Ask me only for:
+1. the public wallet addresses I want tracked and which supported chain each one uses;
+2. the email/password I want for the journal login;
+3. permission to connect or create the necessary Supabase/Vercel/GitHub resources if you cannot already access them.
+
+Never ask for a seed phrase, private key, wallet-signing key, or trading API key.
+
+Use free-tier-compatible infrastructure. Apply the repo migrations, deploy the checked-in Supabase Edge Functions, configure the one-minute incremental cron jobs, create/configure my journal user and wallets, deploy the website to Vercel, and verify that the live site can sign in and that sync status is healthy.
+
+Do not stop after explaining what to do. Complete every step that your tools permit, then give me only the remaining manual clicks, if any.
+```
+
+The full installer instructions are in [docs/AI_SETUP_PROMPT.md](docs/AI_SETUP_PROMPT.md).
+
+## What gets deployed
+
+### Vercel
+
+A small private web app under `web/`.
+
+Required Vercel environment variables:
+
+```text
+SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+```
+
+### Supabase
+
+Migrations under `supabase/migrations/` create:
+
+- authenticated journal rows with RLS
+- wallet records
+- incremental per-wallet sync cursors
+- immutable trade-note entries
+- raw chain events
+- ticker/name metadata
+- holdings/value/P&L metrics
+- Realtime publication for journal positions and notes
+- server-only runtime state for scheduled workers
+
+Current Edge Functions are checked into:
+
+- `supabase/functions/journal-config/`
+- `supabase/functions/journal-chain-sync-lite/`
+- `supabase/functions/journal-sol-sync/`
+- `supabase/functions/journal-token-metadata/`
+- `supabase/functions/journal-position-metrics/`
+
+After deployment, run:
+
+```sql
+select public.install_journal_cron('https://YOUR_PROJECT_REF.supabase.co');
+```
+
+That installs the one-minute sync/metadata/metrics jobs.
+
+## Normal workflow
+
+Open the journal and type your thought immediately after buying:
+
+> TIGRINO — buying because...
+
+You do **not** need to wait for the chain sync. The manual note is saved instantly. When the matching chain activity arrives, the journal reconciles the objective context underneath it.
+
+A detected trade can look like:
+
+```text
+TIGRINO — Leopardus Tilcayo
+Bought 20,648.305857 tokens
+Spent 0.507513 SOL
+Entry 0.00002458 SOL/token
+Held 20,648.305857
+Value $...
+P/L ...
+```
+
+For a fast round trip, selling does not force another essay. The exit note is optional.
+
+## Data model / safety
+
+- **Read-only chain access**
+- No transaction signing
+- No seed phrases
+- No private wallet keys
+- No autonomous trading
+- Wallet identity is chain-aware
+- Same ticker on different contracts stays separate
+- Re-buy after a full exit can create a new trade episode
+- Closed positions are not repeatedly re-indexed
+- P&L is left blank when it cannot be reconstructed confidently
+
+Market metadata/prices are best-effort and may depend on public RPC/indexer/DEX data availability.
+
+## Cost
+
+The project is designed to run on free Supabase + Vercel tiers and public RPC/data endpoints for a small personal journal. Provider limits and pricing can change, so "free forever" is not guaranteed.
+
+## Manual setup
+
+If your AI cannot access GitHub/Supabase/Vercel directly, see [docs/MANUAL_SETUP.md](docs/MANUAL_SETUP.md). It is intentionally short.
+
+## Repository history
+
+Older research and Phase 1 validation files remain under `research/` and `docs/` for provenance. They are **not** the current installation path. The current app is the live-feed journal described in this README.
