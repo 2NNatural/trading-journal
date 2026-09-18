@@ -4,95 +4,89 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#101114" />
-  <meta name="description" content="A private multi-chain trading journal built around objective fills and an immutable thesis timeline." />
-  <title>Private Trading Journal</title>
+  <meta name="description" content="A private live trading journal." />
+  <title>Trading Journal</title>
   <link rel="stylesheet" href="/styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <section class="auth-screen" id="authScreen">
     <form class="auth-card" id="loginForm">
-      <div class="brand-mark auth-mark" aria-hidden="true">T</div>
-      <p class="eyebrow">Private workspace</p><h1>Trading Journal</h1>
-      <p class="auth-copy">Sign in to view or edit your journal. New account registration is intentionally disabled.</p>
+      <div class="brand-mark">T</div>
+      <p class="eyebrow">Private workspace</p>
+      <h1>Trading Journal</h1>
+      <p class="muted">Sign in to your private journal.</p>
       <label>Email<input id="emailField" type="email" autocomplete="username" required /></label>
       <label>Password<input id="passwordField" type="password" autocomplete="current-password" required /></label>
-      <p class="auth-error" id="authError" role="alert"></p>
-      <button class="primary-button auth-submit" type="submit">Sign in</button>
+      <p class="error" id="authError"></p>
+      <button class="primary" type="submit">Sign in</button>
     </form>
   </section>
 
-  <div class="app-shell" id="appShell" hidden>
-    <aside class="sidebar" aria-label="Journal navigation">
-      <div class="brand-lockup"><div class="brand-mark" aria-hidden="true">T</div><div><div class="brand-name">Multi-chain</div><div class="brand-subtitle">Trading journal</div></div></div>
-      <button class="primary-button sidebar-new-button" id="sidebarNewPositionButton" type="button"><span>＋</span> New position</button>
-      <nav class="primary-nav" aria-label="Primary">
-        <button class="nav-item is-active" data-filter="open" type="button"><span class="nav-icon">↗</span>Open positions <span class="nav-count" id="openCount">0</span></button>
-        <button class="nav-item" data-filter="closed" type="button"><span class="nav-icon">✓</span>Closed trades <span class="nav-count" id="closedCount">0</span></button>
-        <button class="nav-item" data-filter="gaps" type="button"><span class="nav-icon">○</span>Thesis gaps <span class="nav-count" id="gapCount">0</span></button>
-      </nav>
-      <div class="sidebar-spacer"></div>
-      <div class="sync-card"><div class="sync-card-heading"><span class="status-dot"></span> Chain autosync</div><p>Only new transactions since each wallet's saved cursor are processed.</p><span class="sync-card-link" id="signedInEmail"></span></div>
-      <div class="sidebar-footer"><span>Multi-chain</span><span class="chain-pill">5 wallets</span></div>
-    </aside>
+  <main class="app" id="appShell" hidden>
+    <header class="topbar">
+      <div>
+        <div class="brand-line"><div class="brand-mark small">T</div><strong>Trading Journal</strong></div>
+        <div class="sync-line" id="syncStatus"><span class="dot"></span> Connecting…</div>
+      </div>
+      <div class="top-actions">
+        <button class="ghost" id="refreshButton" type="button">Refresh</button>
+        <button class="ghost" id="logoutButton" type="button">Sign out</button>
+      </div>
+    </header>
 
-    <main class="main-content">
-      <header class="topbar">
-        <div class="breadcrumb"><span>Journal</span><span class="breadcrumb-separator">/</span><span class="breadcrumb-current" id="currentViewLabel">Open positions</span></div>
-        <div class="topbar-actions"><div class="freshness" id="freshnessLabel"><span class="freshness-dot"></span> Incremental chain sync</div><button class="icon-button" id="refreshButton" type="button" title="Refresh journal">↻</button><button class="text-button" id="logoutButton" type="button">Sign out</button></div>
-      </header>
-
-      <div class="page-content">
-        <section class="hero-row compact-hero"><div><p class="eyebrow" id="viewEyebrow">Active trades</p><h1 id="viewTitle">Open positions</h1><p class="hero-copy" id="viewCopy">Newest positions first. Select one to add or review its thesis.</p></div><div class="hero-actions"><button class="secondary-button" id="newThesisButton" type="button">＋ Thesis update</button><button class="primary-button" id="newPositionButton" type="button"><span>＋</span> New position</button></div></section>
-
-        <section class="panel new-position-panel" id="newPositionPanel" hidden>
-          <div class="composer-heading"><div><p class="eyebrow">Fast manual entry</p><h2>New position</h2></div><button class="close-button" id="closeNewPositionButton" type="button">×</button></div>
-          <p class="new-position-copy">Use this immediately after entering a trade. Chain autosync will attach or reconcile the on-chain transaction later.</p>
-          <form id="newPositionForm">
-            <div class="new-position-grid">
-              <label>Symbol<input id="newPositionSymbol" type="text" autocomplete="off" placeholder="e.g. DUKE" required /></label>
-              <label>Chain<select id="newPositionChain"><option value="robinhood">Robinhood</option><option value="sol">Solana</option><option value="arc">ARC</option><option value="bsc">Binance / BSC</option></select></label>
-              <label>Contract / mint <span class="optional-label">optional</span><input id="newPositionContract" type="text" autocomplete="off" placeholder="Can be linked later by autosync" /></label>
-              <label>Entry / market-cap note <span class="optional-label">optional</span><input id="newPositionSize" type="text" autocomplete="off" placeholder="e.g. $250k mcap · 0.02 ETH" /></label>
-            </div>
-            <label class="new-position-thesis-label">Buy thesis<textarea id="newPositionThesis" rows="4" placeholder="Why are you buying this now?" required></textarea></label>
-            <div class="composer-footer"><span class="composer-hint">Creates the position and first BUY thesis together.</span><button class="primary-button" type="submit">Create position</button></div>
-          </form>
-        </section>
-
-        <section class="metric-grid compact-metrics" aria-label="Journal summary">
-          <article class="metric-card metric-card-accent"><div class="metric-label">Open positions</div><div class="metric-value" id="openPositionsMetric">0</div><div class="metric-note"><span class="metric-arrow">↗</span> Currently tracked</div></article>
-          <article class="metric-card"><div class="metric-label">Closed trades</div><div class="metric-value" id="closedPositionsMetric">0</div><div class="metric-note">Completed episodes</div></article>
-          <article class="metric-card"><div class="metric-label">Thesis coverage</div><div class="metric-value" id="coverageMetric">0%</div><div class="metric-progress"><span id="coverageProgress"></span></div></article>
-          <article class="metric-card"><div class="metric-label">Last chain sync</div><div class="metric-value metric-value-small" id="lastSyncMetric">—</div><div class="metric-note" id="lastSyncNote">Every minute</div></article>
-        </section>
-
-        <section class="panel sync-setup-panel" id="syncSetupPanel" hidden>
-          <div class="panel-heading sync-setup-heading"><div><p class="eyebrow">Autosync setup</p><h2>Multi-chain wallets</h2></div><span class="sync-frequency">Every minute</span></div>
-          <p class="sync-setup-copy">These public wallet addresses are saved server-side. Sync reads only new transactions after each wallet's last chain cursor—no GMGN key or full-history re-indexing.</p>
-          <form id="syncSetupForm" class="sync-setup-form">
-            <div class="wallet-grid">
-              <label>Robinhood wallet<input id="syncRobinhoodField" type="text" autocomplete="off" placeholder="0x…" required /></label>
-              <label>Solana wallet #1<input id="syncSolana1Field" type="text" autocomplete="off" placeholder="Base58 address" required /></label>
-              <label>Solana wallet #2<input id="syncSolana2Field" type="text" autocomplete="off" placeholder="Base58 address" required /></label>
-              <label>ARC wallet<input id="syncArcField" type="text" autocomplete="off" placeholder="0x…" required /></label>
-              <label>Binance / BSC wallet<input id="syncBscField" type="text" autocomplete="off" placeholder="0x…" required /></label>
-            </div>
-            <div class="sync-setup-actions"><span id="syncSetupMessage" class="sync-setup-message"></span><button class="primary-button" type="submit">Save wallet settings</button></div>
-          </form>
-        </section>
-
-        <div class="workspace-grid">
-          <section class="panel positions-panel"><div class="panel-heading"><div><p class="eyebrow" id="listEyebrow">Newest first</p><h2 id="positionListTitle">Open positions</h2></div></div><div class="position-list" id="positionList" aria-live="polite"></div></section>
-          <section class="panel timeline-panel"><div class="panel-heading timeline-heading"><div><p class="eyebrow">Selected position</p><h2 id="timelineTitle">Thesis timeline</h2></div><button class="small-action" id="timelineAddButton" type="button">＋ Update</button></div><div class="selected-position-summary" id="selectedPositionSummary"></div><div class="timeline" id="timeline" aria-live="polite"></div><div class="timeline-empty" id="timelineEmpty" hidden><div class="empty-icon">✦</div><h3>Start the thesis timeline</h3><p>Write down what you believe before the next decision changes the trade.</p><button class="secondary-button" id="emptyAddButton" type="button">Add first thesis</button></div></section>
+    <section class="page">
+      <section class="quick-entry">
+        <div class="quick-heading">
+          <div>
+            <p class="eyebrow">Write it now</p>
+            <h1>What did you just buy?</h1>
+          </div>
+          <span class="shortcut">⌘/Ctrl + Enter saves</span>
         </div>
 
-        <section class="composer-panel panel" id="composerPanel"><div class="composer-heading"><div><p class="eyebrow">Write it as you see it now</p><h2>Add a thesis update</h2></div><button class="close-button" id="closeComposerButton" type="button">×</button></div><form id="thesisForm"><div class="composer-toolbar"><div class="event-type-group"><button class="event-type is-selected" data-event-type="HOLD" type="button">Hold thesis</button><button class="event-type" data-event-type="BUY" type="button">Buy thesis</button><button class="event-type" data-event-type="SELL" type="button">Sell thesis</button><button class="event-type" data-event-type="GENERAL_THOUGHT" type="button">General thought</button></div><label class="confidence-field">Confidence<select id="confidenceField"><option value="">Optional</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label></div><input type="hidden" id="eventTypeField" value="HOLD" /><textarea id="thesisText" rows="4" placeholder="What are you seeing, and what would change your mind?" required></textarea><div class="composer-footer"><span class="composer-hint">Your original text stays unchanged after saving.</span><button class="primary-button" type="submit">Save update</button></div></form></section>
-        <footer class="page-footer"><span>Private Supabase journal · authenticated access only</span><span>Robinhood · Solana · ARC · BSC</span></footer>
+        <form id="quickTradeForm">
+          <div class="quick-row">
+            <input id="quickSymbol" class="symbol-input" type="text" autocomplete="off" placeholder="TOKEN" required />
+            <select id="quickChain">
+              <option value="robinhood">Robinhood</option>
+              <option value="sol">Solana</option>
+              <option value="arc">ARC</option>
+              <option value="bsc">BSC</option>
+            </select>
+          </div>
+          <textarea id="quickThesis" rows="3" placeholder="Why are you buying this right now?" required></textarea>
+          <details class="details">
+            <summary>Optional trade details</summary>
+            <div class="details-grid">
+              <input id="quickContract" type="text" autocomplete="off" placeholder="Contract / mint (optional)" />
+              <input id="quickContext" type="text" autocomplete="off" placeholder="Entry / mcap note (optional)" />
+            </div>
+          </details>
+          <div class="quick-footer">
+            <span id="quickMessage" class="muted"></span>
+            <button class="primary" type="submit">Save buy thesis</button>
+          </div>
+        </form>
+      </section>
+
+      <div class="feed-toolbar">
+        <div>
+          <p class="eyebrow">Live trade log</p>
+          <h2>Newest first</h2>
+        </div>
+        <div class="filters" role="group" aria-label="Trade filters">
+          <button class="filter active" data-filter="all" type="button">All</button>
+          <button class="filter" data-filter="open" type="button">Open</button>
+          <button class="filter" data-filter="closed" type="button">Closed</button>
+        </div>
       </div>
-    </main>
-  </div>
+
+      <section id="tradeFeed" class="trade-feed" aria-live="polite"></section>
+      <div id="feedEmpty" class="empty" hidden>No trades yet.</div>
+    </section>
+  </main>
+
   <script src="/app.js" defer></script>
-  <script src="/chain-sync-ui.js" defer></script>
 </body>
 </html>
