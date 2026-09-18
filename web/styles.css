@@ -31,3 +31,6 @@ h1,h2,p{margin-top:0}h1{margin-bottom:9px;font-size:clamp(25px,3vw,39px);letter-
 .inline-note{display:flex;gap:8px;margin-top:12px}.inline-note input{height:39px}.inline-note .primary{min-width:110px}.exit-row{display:flex;gap:8px;margin-top:12px}.exit-row input{height:39px}.exit-row .mini-button{min-width:98px;padding:0 12px;background:#272a31;color:var(--text)}.exit-row .mini-button:hover{background:#30343c}
 .duration{color:var(--soft)!important}.empty{padding:60px 20px;text-align:center;color:var(--faint)}
 @media(max-width:700px){.topbar{padding:0 16px}.page{padding:24px 14px 50px}.quick-heading,.feed-toolbar,.quick-footer{align-items:flex-start;flex-direction:column}.quick-row,.details-grid{grid-template-columns:1fr}.shortcut{display:none}.filters{width:100%}.filter{flex:1}.trade-top{gap:10px}.inline-note,.exit-row{flex-direction:column}.inline-note .primary,.exit-row .mini-button{width:100%;min-height:39px}}
+
+.objective .pnl-positive{color:var(--accent);border:1px solid rgba(196,245,106,.22);background:rgba(196,245,106,.07)}
+.objective .pnl-negative{color:var(--rose);border:1px solid rgba(245,138,163,.22);background:rgba(245,138,163,.07)}
