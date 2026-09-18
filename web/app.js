@@ -2,16 +2,26 @@ const state = {
   supabase: null,
   user: null,
   positions: [],
-  selectedId: null,
-  filter: 'open',
-  eventType: 'HOLD',
-  hasSavedSyncKey: false
+  entries: [],
+  filter: 'all',
+  realtime: null,
+  reloadTimer: null
 };
 
+const $ = (selector) => document.querySelector(selector);
+
 function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>'"]/g, (character) => ({
+  return String(value ?? '').replace(/[&<>'"]/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
-  }[character]));
+  }[c]));
+}
+
+function slugify(value) {
+  return String(value || 'token').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'token';
+}
+
+function chainLabel(chain) {
+  return ({ robinhood: 'Robinhood', sol: 'Solana', arc: 'ARC', bsc: 'BSC' })[chain] || chain || 'Unknown';
 }
 
 function shortAddress(value) {
@@ -19,23 +29,34 @@ function shortAddress(value) {
   return `${value.slice(0, 6)}…${value.slice(-4)}`;
 }
 
-function chainLabel(chain) {
-  return ({ robinhood: 'Robinhood', sol: 'Solana', arc: 'ARC', bsc: 'BSC' })[chain] || String(chain || 'Unknown');
+function formatTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-function viewMeta() {
-  if (state.filter === 'closed') return { eyebrow: 'Completed trades', title: 'Closed trades', copy: 'Most recently closed and updated trades first.' };
-  if (state.filter === 'gaps') return { eyebrow: 'Needs attention', title: 'Thesis gaps', copy: 'Positions missing a buy, hold, or sell thesis.' };
-  return { eyebrow: 'Active trades', title: 'Open positions', copy: 'Newest positions first. Select one to add or review its thesis.' };
+function dayKey(value) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return 'Unknown date';
+  const today = new Date();
+  const yesterday = new Date(Date.now() - 86400000);
+  const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (sameDay(date, today)) return 'Today';
+  if (sameDay(date, yesterday)) return 'Yesterday';
+  return date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-function positionSortTime(position) {
-  const candidates = [position.lastActivityAt, position.updatedAt, position.createdAt].filter(Boolean);
-  for (const value of candidates) {
-    const time = new Date(value).getTime();
-    if (Number.isFinite(time)) return time;
-  }
-  return 0;
+function durationLabel(start, end) {
+  if (!start || !end) return '';
+  const ms = new Date(end).getTime() - new Date(start).getTime();
+  if (!Number.isFinite(ms) || ms <= 0) return '';
+  const min = Math.round(ms / 60000);
+  if (min < 1) return '<1 min';
+  if (min < 60) return `${min} min`;
+  const hours = Math.floor(min / 60);
+  const rem = min % 60;
+  return rem ? `${hours}h ${rem}m` : `${hours}h`;
 }
 
 async function initSupabase() {
@@ -48,376 +69,303 @@ async function initSupabase() {
 }
 
 function showAuth(message = '') {
-  document.querySelector('#authScreen').hidden = false;
-  document.querySelector('#appShell').hidden = true;
-  document.querySelector('#authError').textContent = message;
+  $('#authScreen').hidden = false;
+  $('#appShell').hidden = true;
+  $('#authError').textContent = message;
 }
 
 function showApp() {
-  document.querySelector('#authScreen').hidden = true;
-  document.querySelector('#appShell').hidden = false;
-  document.querySelector('#signedInEmail').textContent = state.user?.email || 'Authenticated';
-}
-
-function populateSavedWalletFields(wallets) {
-  const robinhood = wallets.find((wallet) => wallet.chain === 'robinhood');
-  const arc = wallets.find((wallet) => wallet.chain === 'arc');
-  const bsc = wallets.find((wallet) => wallet.chain === 'bsc');
-  const solana = wallets.filter((wallet) => wallet.chain === 'sol');
-  const sol1 = solana.find((wallet) => /#1/i.test(wallet.label || '')) || solana[0];
-  const sol2 = solana.find((wallet) => /#2/i.test(wallet.label || '')) || solana.find((wallet) => wallet.id !== sol1?.id);
-
-  const set = (id, value) => { const node = document.querySelector(id); if (node && value) node.value = value; };
-  set('#syncRobinhoodField', robinhood?.address);
-  set('#syncSolana1Field', sol1?.address);
-  set('#syncSolana2Field', sol2?.address);
-  set('#syncArcField', arc?.address);
-  set('#syncBscField', bsc?.address);
-}
-
-async function loadSyncStatus() {
-  const panel = document.querySelector('#syncSetupPanel');
-  const { data: wallets, error: walletError } = await state.supabase
-    .from('wallets')
-    .select('id,address,chain,label,sync_enabled')
-    .eq('sync_enabled', true)
-    .order('created_at', { ascending: true });
-  if (walletError) throw walletError;
-
-  populateSavedWalletFields(wallets || []);
-  state.hasSavedSyncKey = Boolean(wallets?.length);
-  const apiKeyField = document.querySelector('#syncApiKeyField');
-  if (state.hasSavedSyncKey) apiKeyField.placeholder = 'Saved server-side · leave blank to keep it';
-
-  if (!wallets?.length || wallets.length < 5) {
-    panel.hidden = false;
-    document.querySelector('#lastSyncMetric').textContent = wallets?.length ? `${wallets.length}/5` : 'Not set';
-    document.querySelector('#lastSyncNote').textContent = 'Configure all multi-chain wallets';
-    return;
-  }
-
-  const walletIds = wallets.map((wallet) => wallet.id);
-  const { data: syncRows, error: syncError } = await state.supabase
-    .from('sync_state')
-    .select('wallet_id,last_success_at,last_attempt_at,status,error_code,source')
-    .in('wallet_id', walletIds)
-    .order('updated_at', { ascending: false });
-  if (syncError) throw syncError;
-
-  const errors = (syncRows || []).filter((row) => row.status === 'ERROR');
-  const rateLimited = errors.length && errors.every((row) => String(row.error_code || '').includes('429'));
-  if (errors.length) {
-    document.querySelector('#lastSyncMetric').textContent = rateLimited ? 'Retrying' : `${errors.length} error${errors.length === 1 ? '' : 's'}`;
-    document.querySelector('#lastSyncNote').textContent = rateLimited ? 'GMGN rate limited · autosync remains saved' : (errors[0].error_code || 'GMGN sync failed');
-    document.querySelector('#freshnessLabel').innerHTML = `<span class="freshness-dot"></span> ${rateLimited ? 'Rate limited · retrying' : 'Sync needs attention'}`;
-    panel.hidden = false;
-    document.querySelector('#syncSetupMessage').textContent = rateLimited ? 'Wallets and API key are saved. GMGN is rate limiting requests; autosync will retry automatically.' : 'Autosync settings are saved. Update them only if needed.';
-    return;
-  }
-
-  panel.hidden = true;
-  const latest = (syncRows || [])
-    .map((row) => row.last_success_at)
-    .filter(Boolean)
-    .map((value) => new Date(value))
-    .sort((a, b) => b - a)[0];
-
-  document.querySelector('#lastSyncMetric').textContent = latest
-    ? latest.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-    : 'Pending';
-  document.querySelector('#lastSyncNote').textContent = `${wallets.length} wallets · every 15 min`;
-  document.querySelector('#freshnessLabel').innerHTML = '<span class="freshness-dot"></span> Multi-chain GMGN autosync';
-}
-
-async function loadJournal() {
-  const { data: positions, error: positionsError } = await state.supabase
-    .from('journal_positions')
-    .select('*')
-    .order('updated_at', { ascending: false });
-  if (positionsError) throw positionsError;
-
-  const { data: entries, error: entriesError } = await state.supabase
-    .from('journal_entries')
-    .select('*')
-    .order('written_at', { ascending: true });
-  if (entriesError) throw entriesError;
-
-  const byPosition = new Map();
-  for (const entry of entries || []) {
-    if (!byPosition.has(entry.journal_position_id)) byPosition.set(entry.journal_position_id, []);
-    byPosition.get(entry.journal_position_id).push({
-      id: entry.id,
-      type: entry.kind,
-      date: entry.display_date || new Date(entry.written_at).toLocaleDateString(),
-      text: entry.original_text,
-      confidence: entry.confidence,
-      context: entry.context_label || 'Personal note'
-    });
-  }
-
-  state.positions = (positions || []).map((position) => ({
-    id: position.id,
-    slug: position.slug,
-    symbol: position.symbol,
-    short: position.short_label || position.symbol.slice(0, 2).toUpperCase(),
-    iconClass: position.icon_class || '',
-    status: String(position.status || 'UNKNOWN').toLowerCase(),
-    opened: position.opened_label || '—',
-    size: position.size_label || '—',
-    pnl: position.pnl_label || '—',
-    pnlPercent: position.pnl_percent_label || '—',
-    value: position.value_label || 'Not synced',
-    tokenAddress: position.token_address || null,
-    chain: position.chain || 'robinhood',
-    walletId: position.wallet_id || null,
-    holdThesisRequired: Boolean(position.hold_thesis_required),
-    thesis: byPosition.get(position.id) || [],
-    createdAt: position.created_at,
-    updatedAt: position.updated_at,
-    lastActivityAt: position.last_activity_at
-  })).sort((a, b) => positionSortTime(b) - positionSortTime(a));
-
-  const visible = filteredPositions();
-  if (!visible.some((position) => position.id === state.selectedId)) {
-    state.selectedId = visible[0]?.id || state.positions[0]?.id || null;
-  }
-  render();
-  await loadSyncStatus();
-}
-
-function selectedPosition() {
-  return state.positions.find((position) => position.id === state.selectedId) || filteredPositions()[0] || state.positions[0];
-}
-
-function hasEvent(position, type) { return position?.thesis?.some((event) => event.type === type); }
-
-function isThesisGap(position) {
-  if (!hasEvent(position, 'BUY')) return true;
-  if (position.status === 'closed' && !hasEvent(position, 'SELL')) return true;
-  return Boolean(position.holdThesisRequired && !hasEvent(position, 'HOLD'));
-}
-
-function filteredPositions() {
-  const filtered = state.positions.filter((position) => {
-    if (state.filter === 'open') return position.status === 'open';
-    if (state.filter === 'closed') return position.status === 'closed';
-    if (state.filter === 'gaps') return isThesisGap(position);
-    return false;
-  });
-  return filtered.sort((a, b) => positionSortTime(b) - positionSortTime(a));
-}
-
-function renderMetrics() {
-  const open = state.positions.filter((position) => position.status === 'open').length;
-  const closed = state.positions.filter((position) => position.status === 'closed').length;
-  const coverage = state.positions.length
-    ? Math.round((state.positions.filter((position) => hasEvent(position, 'BUY')).length / state.positions.length) * 100)
-    : 0;
-  document.querySelector('#openPositionsMetric').textContent = String(open);
-  document.querySelector('#closedPositionsMetric').textContent = String(closed);
-  document.querySelector('#coverageMetric').textContent = `${coverage}%`;
-  document.querySelector('#coverageProgress').style.width = `${coverage}%`;
-  document.querySelector('#openCount').textContent = String(open);
-  document.querySelector('#closedCount').textContent = String(closed);
-  document.querySelector('#gapCount').textContent = String(state.positions.filter(isThesisGap).length);
-}
-
-function renderViewChrome() {
-  const meta = viewMeta();
-  document.querySelector('#currentViewLabel').textContent = meta.title;
-  document.querySelector('#viewEyebrow').textContent = meta.eyebrow;
-  document.querySelector('#viewTitle').textContent = meta.title;
-  document.querySelector('#viewCopy').textContent = meta.copy;
-  document.querySelector('#positionListTitle').textContent = meta.title;
-  document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('is-active', item.dataset.filter === state.filter));
-}
-
-function renderPositionList() {
-  const list = document.querySelector('#positionList');
-  const positions = filteredPositions();
-  if (!positions.length) {
-    const message = state.filter === 'open' ? 'No open positions yet.' : state.filter === 'closed' ? 'No closed trades yet.' : 'No thesis gaps in this view.';
-    list.innerHTML = `<div class="timeline-empty compact-empty"><div class="empty-icon">○</div><h3>${escapeHtml(message)}</h3><p>${state.filter === 'open' ? 'Add a position manually or wait for autosync.' : 'Switch views to keep journaling.'}</p></div>`;
-    return;
-  }
-  list.innerHTML = positions.map((position) => {
-    const contract = position.tokenAddress ? ` · ${shortAddress(position.tokenAddress)}` : '';
-    return `
-    <button class="position-row ${position.id === state.selectedId ? 'is-selected' : ''}" data-position-id="${escapeHtml(position.id)}" type="button">
-      <span class="position-primary">
-        <span class="token-icon ${escapeHtml(position.iconClass)}">${escapeHtml(position.short)}</span>
-        <span><span class="position-name">${escapeHtml(position.symbol)} <span class="chain-tag">${escapeHtml(chainLabel(position.chain))}</span></span><span class="position-meta">${escapeHtml(position.opened)} · ${escapeHtml(position.size)}${escapeHtml(contract)}</span></span>
-      </span>
-      <span class="position-right"><span class="position-pnl ${String(position.pnl).startsWith('-') ? 'negative' : 'positive'}">${escapeHtml(position.pnl)}</span><span class="position-status ${escapeHtml(position.status)}">${escapeHtml(position.holdThesisRequired && !hasEvent(position, 'HOLD') ? 'hold thesis needed' : position.status)}</span></span>
-    </button>`;
-  }).join('');
-}
-
-function renderTimeline() {
-  const position = selectedPosition();
-  const summary = document.querySelector('#selectedPositionSummary');
-  const timeline = document.querySelector('#timeline');
-  const empty = document.querySelector('#timelineEmpty');
-  if (!position) {
-    summary.innerHTML = '<span>No position selected.</span>';
-    timeline.innerHTML = '';
-    empty.hidden = false;
-    return;
-  }
-  const contract = position.tokenAddress ? ` · ${shortAddress(position.tokenAddress)}` : '';
-  summary.innerHTML = `<div class="summary-token"><span class="token-icon ${escapeHtml(position.iconClass)}">${escapeHtml(position.short)}</span><div><strong>${escapeHtml(position.symbol)} <span class="chain-tag">${escapeHtml(chainLabel(position.chain))}</span></strong><span>${escapeHtml(position.opened)} · ${escapeHtml(position.size)}${escapeHtml(contract)}</span></div></div><div class="summary-value"><strong>${escapeHtml(position.value)}</strong><span class="${position.holdThesisRequired && !hasEvent(position, 'HOLD') ? 'summary-hold-note' : ''}">${position.holdThesisRequired && !hasEvent(position, 'HOLD') ? 'Hold thesis needed' : escapeHtml(position.status)}</span></div>`;
-  if (!position.thesis.length) {
-    timeline.innerHTML = '';
-    empty.hidden = false;
-    return;
-  }
-  empty.hidden = true;
-  timeline.innerHTML = position.thesis.map((event) => {
-    const kind = event.type === 'GENERAL_THOUGHT' ? 'general' : event.type.toLowerCase();
-    return `<article class="timeline-event"><span class="timeline-marker ${kind}"></span><div class="timeline-topline"><span class="timeline-type">${escapeHtml(event.type.replaceAll('_', ' '))}</span><span class="timeline-date">${escapeHtml(event.date)}</span></div><p class="timeline-copy">${escapeHtml(event.text)}</p><div class="timeline-tags"><span class="timeline-tag">${escapeHtml(event.context || 'Personal note')}</span>${event.confidence ? `<span class="timeline-tag">${escapeHtml(event.confidence)} confidence</span>` : ''}</div></article>`;
-  }).join('');
-}
-
-function render() {
-  renderMetrics();
-  renderViewChrome();
-  renderPositionList();
-  renderTimeline();
-}
-
-function openComposer() {
-  if (!selectedPosition()) return;
-  document.querySelector('#composerPanel').classList.add('is-open');
-  document.querySelector('#thesisText').focus();
-  document.querySelector('#composerPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-function closeComposer() { document.querySelector('#composerPanel').classList.remove('is-open'); }
-
-function openNewPosition() {
-  document.querySelector('#newPositionPanel').hidden = false;
-  document.querySelector('#newPositionSymbol').focus();
-  document.querySelector('#newPositionPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function closeNewPosition() { document.querySelector('#newPositionPanel').hidden = true; }
-
-async function saveNewPosition(event) {
-  event.preventDefault();
-  const symbol = document.querySelector('#newPositionSymbol').value.trim();
-  const chain = document.querySelector('#newPositionChain').value;
-  let tokenAddress = document.querySelector('#newPositionContract').value.trim() || null;
-  const size = document.querySelector('#newPositionSize').value.trim();
-  const thesis = document.querySelector('#newPositionThesis').value.trim();
-  if (!symbol || !thesis) return;
-  if (tokenAddress && chain !== 'sol') tokenAddress = tokenAddress.toLowerCase();
-
-  const now = new Date();
-  const openedLabel = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const slugBase = symbol.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'position';
-  const slug = `${slugBase}-${chain}-${Date.now().toString(36)}`;
-
-  const { data: position, error: positionError } = await state.supabase.from('journal_positions').insert({
-    user_id: state.user.id,
-    slug,
-    symbol,
-    short_label: symbol.slice(0, 2).toUpperCase(),
-    status: 'OPEN',
-    opened_label: openedLabel,
-    size_label: size || 'Manual entry',
-    value_label: 'Manual position',
-    hold_thesis_required: false,
-    token_address: tokenAddress,
-    chain,
-    source: 'manual',
-    sync_source: 'manual'
-  }).select('id').single();
-  if (positionError) return window.alert(`Unable to create position: ${positionError.message}`);
-
-  const { error: thesisError } = await state.supabase.from('journal_entries').insert({
-    user_id: state.user.id,
-    journal_position_id: position.id,
-    kind: 'BUY',
-    original_text: thesis,
-    display_date: openedLabel,
-    context_label: size ? `Entry · ${size}` : 'Manual entry'
-  });
-  if (thesisError) {
-    await state.supabase.from('journal_positions').delete().eq('id', position.id);
-    return window.alert(`Unable to save buy thesis: ${thesisError.message}`);
-  }
-
-  document.querySelector('#newPositionForm').reset();
-  closeNewPosition();
-  state.filter = 'open';
-  state.selectedId = position.id;
-  await loadJournal();
-}
-
-async function saveThesis(event) {
-  event.preventDefault();
-  const position = selectedPosition();
-  const text = document.querySelector('#thesisText').value.trim();
-  if (!position || !text) return;
-  const confidence = document.querySelector('#confidenceField').value || null;
-  const { error } = await state.supabase.from('journal_entries').insert({
-    user_id: state.user.id,
-    journal_position_id: position.id,
-    kind: state.eventType,
-    original_text: text,
-    confidence,
-    display_date: 'Just now',
-    context_label: 'Personal note'
-  });
-  if (error) return window.alert(`Unable to save: ${error.message}`);
-  if (state.eventType === 'HOLD' && position.holdThesisRequired) {
-    await state.supabase.from('journal_positions').update({ hold_thesis_required: false }).eq('id', position.id);
-  }
-  document.querySelector('#thesisText').value = '';
-  document.querySelector('#confidenceField').value = '';
-  closeComposer();
-  await loadJournal();
-}
-
-async function saveSyncSetup(event) {
-  event.preventDefault();
-  const apiKey = document.querySelector('#syncApiKeyField').value.trim();
-  const wallets = [
-    { chain: 'robinhood', address: document.querySelector('#syncRobinhoodField').value.trim(), label: 'Robinhood wallet' },
-    { chain: 'sol', address: document.querySelector('#syncSolana1Field').value.trim(), label: 'Solana wallet #1' },
-    { chain: 'sol', address: document.querySelector('#syncSolana2Field').value.trim(), label: 'Solana wallet #2' },
-    { chain: 'arc', address: document.querySelector('#syncArcField').value.trim(), label: 'ARC wallet' },
-    { chain: 'bsc', address: document.querySelector('#syncBscField').value.trim(), label: 'Binance / BSC wallet' }
-  ];
-  const message = document.querySelector('#syncSetupMessage');
-  if (!apiKey && state.hasSavedSyncKey) {
-    message.textContent = 'Wallet addresses are already saved. Enter a new GMGN key only if you want to replace the saved one.';
-    return;
-  }
-  message.textContent = 'Saving 5 wallets…';
-  const { data, error } = await state.supabase.functions.invoke('journal-config', {
-    body: { wallets, gmgn_api_key: apiKey }
-  });
-  if (error || data?.error) {
-    message.textContent = data?.error || error?.message || 'Unable to configure autosync.';
-    return;
-  }
-  document.querySelector('#syncApiKeyField').value = '';
-  state.hasSavedSyncKey = true;
-  message.textContent = data?.sync_triggered ? 'Saved. First multi-chain sync started.' : 'Saved. Next sync is within 15 minutes.';
-  window.setTimeout(() => loadJournal().catch(console.error), 3500);
+  $('#authScreen').hidden = true;
+  $('#appShell').hidden = false;
 }
 
 async function signIn(event) {
   event.preventDefault();
-  document.querySelector('#authError').textContent = '';
-  const email = document.querySelector('#emailField').value.trim();
-  const password = document.querySelector('#passwordField').value;
-  const { data, error } = await state.supabase.auth.signInWithPassword({ email, password });
+  $('#authError').textContent = '';
+  const { data, error } = await state.supabase.auth.signInWithPassword({
+    email: $('#emailField').value.trim(),
+    password: $('#passwordField').value
+  });
   if (error) return showAuth(error.message);
   state.user = data.user;
   showApp();
-  await loadJournal();
+  await loadAll();
+  subscribeRealtime();
+}
+
+async function loadAll() {
+  const [{ data: positions, error: pError }, { data: entries, error: eError }] = await Promise.all([
+    state.supabase.from('journal_positions').select('*').order('created_at', { ascending: false }),
+    state.supabase.from('journal_entries').select('*').order('written_at', { ascending: true })
+  ]);
+  if (pError) throw pError;
+  if (eError) throw eError;
+  state.positions = positions || [];
+  state.entries = entries || [];
+  renderFeed();
+  await loadSyncStatus();
+}
+
+async function loadSyncStatus() {
+  const { data: wallets, error: wError } = await state.supabase
+    .from('wallets')
+    .select('id,chain,label,sync_enabled')
+    .eq('sync_enabled', true);
+  if (wError) return;
+
+  if (!wallets?.length) {
+    $('#syncStatus').innerHTML = '<span class="dot error"></span> Wallet sync not configured';
+    return;
+  }
+
+  const ids = wallets.map((w) => w.id);
+  const { data: rows, error } = await state.supabase
+    .from('sync_state')
+    .select('wallet_id,status,error_code,last_success_at')
+    .in('wallet_id', ids)
+    .eq('source', 'chain-rpc');
+  if (error) return;
+
+  const latestByWallet = new Map();
+  for (const row of rows || []) {
+    const prev = latestByWallet.get(row.wallet_id);
+    if (!prev || new Date(row.last_success_at || 0) > new Date(prev.last_success_at || 0)) latestByWallet.set(row.wallet_id, row);
+  }
+  const current = [...latestByWallet.values()];
+  const errors = current.filter((r) => r.status === 'ERROR');
+  if (errors.length) {
+    $('#syncStatus').innerHTML = `<span class="dot error"></span> ${errors.length} wallet${errors.length === 1 ? '' : 's'} need sync attention`;
+    return;
+  }
+  const latest = current.map((r) => r.last_success_at).filter(Boolean).sort().at(-1);
+  $('#syncStatus').innerHTML = `<span class="dot"></span> Live chain sync · ${latest ? 'last ' + formatTime(latest) : 'starting'}`;
+}
+
+function entriesFor(positionId) {
+  return state.entries.filter((e) => e.journal_position_id === positionId);
+}
+
+function filteredPositions() {
+  return state.positions.filter((p) => {
+    const status = String(p.status || '').toLowerCase();
+    if (state.filter === 'open') return status === 'open';
+    if (state.filter === 'closed') return status === 'closed';
+    return true;
+  });
+}
+
+function objectiveChips(position) {
+  const chips = [];
+  const size = String(position.size_label || '').trim();
+  const value = String(position.value_label || '').trim();
+  const autoPlaceholder = /auto-detected|activity|not synced|manual entry/i;
+
+  chips.push(`<span>${escapeHtml(chainLabel(position.chain))}</span>`);
+  if (size && !autoPlaceholder.test(size)) chips.push(`<span>${escapeHtml(size)}</span>`);
+  if (value && !autoPlaceholder.test(value)) chips.push(`<span>${escapeHtml(value)}</span>`);
+  if (position.token_address) chips.push(`<span>${escapeHtml(shortAddress(position.token_address))}</span>`);
+
+  if ((!size || autoPlaceholder.test(size)) && (!value || autoPlaceholder.test(value))) {
+    chips.push('<span class="pending">On-chain size / price context syncing</span>');
+  }
+
+  const status = String(position.status || '').toLowerCase();
+  if (status === 'closed') {
+    const held = durationLabel(position.created_at, position.last_activity_at || position.updated_at);
+    if (held) chips.push(`<span class="duration">Held ${escapeHtml(held)}</span>`);
+  }
+  return chips.join('');
+}
+
+function noteHtml(entry) {
+  const kind = entry.kind === 'GENERAL_THOUGHT' ? 'Note' : entry.kind;
+  return `<div class="note">
+    <span class="note-kind">${escapeHtml(kind)}</span>
+    <div><span class="note-text">${escapeHtml(entry.original_text)}</span>
+    <span class="note-time">${escapeHtml(entry.display_date || formatTime(entry.written_at))}</span></div>
+  </div>`;
+}
+
+function cardHtml(position) {
+  const status = String(position.status || 'UNKNOWN').toLowerCase();
+  const entries = entriesFor(position.id);
+  const hasBuy = entries.some((e) => e.kind === 'BUY');
+  const notes = entries.map(noteHtml).join('');
+  const opened = position.created_at || position.first_synced_at || position.updated_at;
+  const symbol = position.symbol || 'Unknown';
+  const buyEditor = status === 'open' && !hasBuy ? `
+    <form class="inline-note" data-buy-note="${escapeHtml(position.id)}">
+      <input type="text" placeholder="Why did I buy this?" required />
+      <button class="primary" type="submit">Save note</button>
+    </form>` : '';
+
+  const exitRow = status === 'open' ? `
+    <form class="exit-row" data-close-position="${escapeHtml(position.id)}">
+      <input type="text" placeholder="Exit note (optional)" />
+      <button class="mini-button" type="submit">Mark sold</button>
+    </form>` : '';
+
+  return `<article class="trade-card" data-position-id="${escapeHtml(position.id)}">
+    <div class="trade-top">
+      <div class="trade-title">
+        <div class="token-badge">${escapeHtml((symbol || '??').slice(0,2).toUpperCase())}</div>
+        <div>
+          <div class="trade-name">${escapeHtml(symbol)}</div>
+          <div class="trade-meta">${escapeHtml(formatTime(opened))} · ${escapeHtml(chainLabel(position.chain))}</div>
+        </div>
+      </div>
+      <span class="trade-state ${status === 'closed' ? 'closed' : ''}">${status === 'closed' ? 'Sold' : 'Open'}</span>
+    </div>
+    <div class="objective">${objectiveChips(position)}</div>
+    ${notes ? `<div class="notes">${notes}</div>` : ''}
+    ${buyEditor}
+    ${exitRow}
+  </article>`;
+}
+
+function renderFeed() {
+  const positions = filteredPositions();
+  $('#feedEmpty').hidden = Boolean(positions.length);
+  if (!positions.length) {
+    $('#tradeFeed').innerHTML = '';
+    return;
+  }
+
+  const groups = new Map();
+  for (const p of positions) {
+    const key = dayKey(p.created_at || p.first_synced_at || p.updated_at);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(p);
+  }
+
+  $('#tradeFeed').innerHTML = [...groups.entries()].map(([day, rows]) =>
+    `<section class="day-group"><div class="day-heading">${escapeHtml(day)}</div>${rows.map(cardHtml).join('')}</section>`
+  ).join('');
+}
+
+async function saveQuickTrade(event) {
+  event.preventDefault();
+  const symbol = $('#quickSymbol').value.trim().toUpperCase();
+  const thesis = $('#quickThesis').value.trim();
+  if (!symbol || !thesis) return;
+
+  const chain = $('#quickChain').value;
+  const contract = $('#quickContract').value.trim() || null;
+  const context = $('#quickContext').value.trim() || null;
+  $('#quickMessage').textContent = 'Saving…';
+
+  const payload = {
+    user_id: state.user.id,
+    slug: `${slugify(symbol)}-manual-${Date.now()}-${crypto.randomUUID().slice(0,8)}`,
+    symbol,
+    short_label: symbol.slice(0,2),
+    status: 'OPEN',
+    opened_label: new Date().toLocaleDateString([], { month: 'short', day: 'numeric' }),
+    size_label: context || 'Manual entry',
+    value_label: 'Awaiting chain context',
+    hold_thesis_required: false,
+    token_address: contract,
+    chain,
+    source: 'manual',
+    sync_source: 'manual'
+  };
+
+  const { data: position, error } = await state.supabase
+    .from('journal_positions')
+    .insert(payload)
+    .select('id')
+    .single();
+
+  if (error) {
+    $('#quickMessage').textContent = error.message;
+    return;
+  }
+
+  const { error: noteError } = await state.supabase.from('journal_entries').insert({
+    user_id: state.user.id,
+    journal_position_id: position.id,
+    kind: 'BUY',
+    original_text: thesis,
+    display_date: 'Just now',
+    context_label: 'Buy thesis'
+  });
+
+  if (noteError) {
+    $('#quickMessage').textContent = noteError.message;
+    return;
+  }
+
+  $('#quickTradeForm').reset();
+  $('#quickChain').value = chain;
+  $('#quickMessage').textContent = 'Saved.';
+  await loadAll();
+  $('#quickSymbol').focus();
+}
+
+async function saveInlineBuy(event) {
+  const form = event.target.closest('[data-buy-note]');
+  if (!form) return false;
+  event.preventDefault();
+  const text = form.querySelector('input').value.trim();
+  if (!text) return true;
+  const { error } = await state.supabase.from('journal_entries').insert({
+    user_id: state.user.id,
+    journal_position_id: form.dataset.buyNote,
+    kind: 'BUY',
+    original_text: text,
+    display_date: 'Just now',
+    context_label: 'Buy thesis'
+  });
+  if (error) window.alert(error.message);
+  else await loadAll();
+  return true;
+}
+
+async function closePosition(event) {
+  const form = event.target.closest('[data-close-position]');
+  if (!form) return false;
+  event.preventDefault();
+  const id = form.dataset.closePosition;
+  const exitNote = form.querySelector('input').value.trim();
+
+  const { error } = await state.supabase.from('journal_positions').update({
+    status: 'CLOSED',
+    hold_thesis_required: false,
+    last_activity_at: new Date().toISOString()
+  }).eq('id', id);
+  if (error) {
+    window.alert(error.message);
+    return true;
+  }
+
+  if (exitNote) {
+    const { error: noteError } = await state.supabase.from('journal_entries').insert({
+      user_id: state.user.id,
+      journal_position_id: id,
+      kind: 'SELL',
+      original_text: exitNote,
+      display_date: 'Just now',
+      context_label: 'Exit note'
+    });
+    if (noteError) window.alert(noteError.message);
+  }
+
+  await loadAll();
+  return true;
+}
+
+function debounceReload() {
+  window.clearTimeout(state.reloadTimer);
+  state.reloadTimer = window.setTimeout(() => loadAll().catch(console.error), 250);
+}
+
+function subscribeRealtime() {
+  if (state.realtime) state.supabase.removeChannel(state.realtime);
+  state.realtime = state.supabase
+    .channel(`journal-live-${state.user.id}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'journal_positions' }, debounceReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'journal_entries' }, debounceReload)
+    .subscribe();
 }
 
 async function boot() {
@@ -431,48 +379,37 @@ async function boot() {
     });
     if (!state.user) return showAuth();
     showApp();
-    await loadJournal();
+    await loadAll();
+    subscribeRealtime();
+    window.setInterval(() => loadSyncStatus().catch(() => {}), 15000);
   } catch (error) {
-    showAuth(error.message || 'Unable to initialize the journal.');
+    showAuth(error.message || 'Unable to initialize journal.');
   }
 }
 
-document.querySelector('#loginForm').addEventListener('submit', signIn);
-document.querySelector('#logoutButton').addEventListener('click', async () => {
+$('#loginForm').addEventListener('submit', signIn);
+$('#logoutButton').addEventListener('click', async () => {
+  if (state.realtime) state.supabase.removeChannel(state.realtime);
   await state.supabase.auth.signOut();
-  state.positions = [];
   state.user = null;
   showAuth();
 });
-document.querySelector('#positionList').addEventListener('click', (event) => {
-  const row = event.target.closest('[data-position-id]');
-  if (!row) return;
-  state.selectedId = row.dataset.positionId;
-  render();
+$('#refreshButton').addEventListener('click', () => loadAll().catch(console.error));
+$('#quickTradeForm').addEventListener('submit', saveQuickTrade);
+$('#tradeFeed').addEventListener('submit', async (event) => {
+  if (await saveInlineBuy(event)) return;
+  await closePosition(event);
 });
-document.querySelectorAll('.nav-item').forEach((item) => item.addEventListener('click', () => {
-  state.filter = item.dataset.filter;
-  const visible = filteredPositions();
-  state.selectedId = visible[0]?.id || null;
-  closeComposer();
-  closeNewPosition();
-  render();
+document.querySelectorAll('.filter').forEach((button) => button.addEventListener('click', () => {
+  state.filter = button.dataset.filter;
+  document.querySelectorAll('.filter').forEach((item) => item.classList.toggle('active', item === button));
+  renderFeed();
 }));
-document.querySelectorAll('.event-type').forEach((button) => button.addEventListener('click', () => {
-  state.eventType = button.dataset.eventType;
-  document.querySelector('#eventTypeField').value = state.eventType;
-  document.querySelectorAll('.event-type').forEach((item) => item.classList.toggle('is-selected', item === button));
-}));
-document.querySelector('#thesisForm').addEventListener('submit', saveThesis);
-document.querySelector('#newPositionForm').addEventListener('submit', saveNewPosition);
-document.querySelector('#syncSetupForm').addEventListener('submit', saveSyncSetup);
-document.querySelector('#newPositionButton').addEventListener('click', openNewPosition);
-document.querySelector('#sidebarNewPositionButton').addEventListener('click', openNewPosition);
-document.querySelector('#closeNewPositionButton').addEventListener('click', closeNewPosition);
-document.querySelector('#newThesisButton').addEventListener('click', openComposer);
-document.querySelector('#timelineAddButton').addEventListener('click', openComposer);
-document.querySelector('#emptyAddButton').addEventListener('click', openComposer);
-document.querySelector('#closeComposerButton').addEventListener('click', closeComposer);
-document.querySelector('#refreshButton').addEventListener('click', loadJournal);
+$('#quickThesis').addEventListener('keydown', (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+    event.preventDefault();
+    $('#quickTradeForm').requestSubmit();
+  }
+});
 
 boot();
