@@ -154,6 +154,22 @@ function filteredPositions() {
   });
 }
 
+function compactNumber(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  if (Math.abs(n) >= 1000000) return n.toLocaleString([], { maximumFractionDigits: 0 });
+  if (Math.abs(n) >= 1000) return n.toLocaleString([], { maximumFractionDigits: 2 });
+  if (Math.abs(n) >= 1) return n.toLocaleString([], { maximumFractionDigits: 4 });
+  if (n === 0) return '0';
+  return n.toPrecision(4);
+}
+
+function money(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return n.toLocaleString([], { style: 'currency', currency: 'USD', maximumFractionDigits: Math.abs(n) < 1 ? 4 : 2 });
+}
+
 function objectiveChips(position) {
   const chips = [];
   const size = String(position.size_label || '').trim();
@@ -164,6 +180,20 @@ function objectiveChips(position) {
   if (size && !autoPlaceholder.test(size)) chips.push(`<span>${escapeHtml(size)}</span>`);
   if (value && !autoPlaceholder.test(value)) chips.push(`<span>${escapeHtml(value)}</span>`);
   if (position.token_address) chips.push(`<span>${escapeHtml(shortAddress(position.token_address))}</span>`);
+
+  const holding = compactNumber(position.current_token_balance);
+  if (holding !== null) chips.push(`<span>Held ${escapeHtml(holding)}</span>`);
+
+  const currentUsd = money(position.current_value_usd);
+  if (currentUsd !== null && Number(position.current_value_usd) > 0) {
+    chips.push(`<span>Value ${escapeHtml(currentUsd)}</span>`);
+  }
+
+  if (position.pnl_label) {
+    const pnlClass = Number(position.total_pnl_quote) < 0 ? 'pnl-negative' : 'pnl-positive';
+    const pct = position.pnl_percent_label ? ` · ${position.pnl_percent_label}` : '';
+    chips.push(`<span class="${pnlClass}">P/L ${escapeHtml(position.pnl_label)}${escapeHtml(pct)}</span>`);
+  }
 
   if ((!size || autoPlaceholder.test(size)) && (!value || autoPlaceholder.test(value))) {
     chips.push('<span class="pending">On-chain size / price context syncing</span>');
